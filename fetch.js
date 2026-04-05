@@ -10,11 +10,9 @@ const workbook = xlsx.readFile("data_j.xlsx");
 const sheet = workbook.Sheets["Sheet1"];
 const rows = xlsx.utils.sheet_to_json(sheet);
 
-// デバッグ：Excel の読み込み確認
 console.log("Excel rows count:", rows.length);
 console.log("First 3 rows:", rows.slice(0, 3));
 
-// コード列を抽出
 let symbols = rows
   .map(r => String(r["コード"]).trim())
   .filter(code => code && code !== "undefined")
@@ -95,7 +93,6 @@ async function main() {
 
     finalData[symbol] = data;
 
-    // Yahoo API 負荷対策
     await new Promise(r => setTimeout(r, 500));
   }
 
@@ -106,18 +103,18 @@ async function main() {
   console.log("data.json updated successfully");
 
   // -----------------------------
-  // 5. バックアップ処理
+  // 5. バックアップ処理（JST & 絶対パス対応）
   // -----------------------------
-  const backupDir = path.join("backup", "data.json");
+  const backupDir = path.join(process.cwd(), "backup", "data.json");
 
-  // フォルダが無ければ作成
   if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
   }
 
-  // タイムスタンプ生成
-  const now = new Date();
+  // JST の現在時刻
+  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const pad = n => String(n).padStart(2, "0");
+
   const timestamp =
     now.getFullYear().toString() +
     pad(now.getMonth() + 1) +
@@ -129,17 +126,16 @@ async function main() {
 
   const backupFile = path.join(backupDir, `data.json.${timestamp}`);
 
-  // data.json をバックアップとしてコピー
   fs.copyFileSync("data.json", backupFile);
   console.log(`Backup created: ${backupFile}`);
 
   // -----------------------------
-  // 6. バックアップは 3 個だけ保持（古いものから削除）
+  // 6. バックアップは 3 個だけ保持
   // -----------------------------
   const files = fs
     .readdirSync(backupDir)
     .filter(f => f.startsWith("data.json."))
-    .sort(); // 古い順に並ぶ
+    .sort(); // 古い順
 
   while (files.length > 3) {
     const oldFile = files.shift();

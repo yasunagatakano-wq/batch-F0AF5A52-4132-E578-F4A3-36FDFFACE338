@@ -1,6 +1,7 @@
 import fetch from "node-fetch";
 import fs from "fs";
 import xlsx from "xlsx";
+import path from "path";
 
 // -----------------------------
 // 1. Excel から銘柄コードを読み込む
@@ -36,7 +37,6 @@ async function fetchSymbol(symbol) {
     const res = await fetch(url);
     const json = await res.json();
 
-    // Yahoo が null を返した場合
     if (!json.chart || !json.chart.result) {
       console.log(`No data for ${symbol}:`, json.chart?.error?.description);
       return {
@@ -50,9 +50,7 @@ async function fetchSymbol(symbol) {
 
     if (!timestamps || timestamps.length < 2) {
       console.log(`Not enough data for ${symbol}`);
-      return {
-        error: "Not enough historical data"
-      };
+      return { error: "Not enough historical data" };
     }
 
     // -----------------------------
@@ -81,9 +79,7 @@ async function fetchSymbol(symbol) {
 
   } catch (err) {
     console.log(`Error fetching ${symbol}:`, err);
-    return {
-      error: "Network or fetch error"
-    };
+    return { error: "Network or fetch error" };
   }
 }
 
@@ -97,7 +93,6 @@ async function main() {
     console.log(`Fetching ${symbol}...`);
     const data = await fetchSymbol(symbol);
 
-    // 成功・失敗に関わらず data.json に記録
     finalData[symbol] = data;
 
     // Yahoo API 負荷対策
@@ -105,10 +100,53 @@ async function main() {
   }
 
   // -----------------------------
-  // 4. data.json に保存
+  // 4. data.json を洗い替え
   // -----------------------------
   fs.writeFileSync("data.json", JSON.stringify(finalData, null, 2));
   console.log("data.json updated successfully");
+
+  // -----------------------------
+  // 5. バックアップ処理
+  // -----------------------------
+  const backupDir = path.join("backup", "data.json");
+
+  // フォルダが無ければ作成
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+  }
+
+  // タイムスタンプ生成
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const timestamp =
+    now.getFullYear().toString() +
+    pad(now.getMonth() + 1) +
+    pad(now.getDate()) +
+    "_" +
+    pad(now.getHours()) +
+    pad(now.getMinutes()) +
+    pad(now.getSeconds());
+
+  const backupFile = path.join(backupDir, `data.json.${timestamp}`);
+
+  // data.json をバックアップとしてコピー
+  fs.copyFileSync("data.json", backupFile);
+  console.log(`Backup created: ${backupFile}`);
+
+  // -----------------------------
+  // 6. バックアップは 3 個だけ保持（古いものから削除）
+  // -----------------------------
+  const files = fs
+    .readdirSync(backupDir)
+    .filter(f => f.startsWith("data.json."))
+    .sort(); // 古い順に並ぶ
+
+  while (files.length > 3) {
+    const oldFile = files.shift();
+    const oldPath = path.join(backupDir, oldFile);
+    fs.unlinkSync(oldPath);
+    console.log(`Old backup removed: ${oldPath}`);
+  }
 }
 
 main();

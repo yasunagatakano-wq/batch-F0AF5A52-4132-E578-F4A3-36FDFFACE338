@@ -13,7 +13,7 @@ const rows = xlsx.utils.sheet_to_json(sheet);
 console.log("Excel rows count:", rows.length);
 console.log("First 3 rows:", rows.slice(0, 3));
 
-// コード列を抽出（数字・アルファベット混在OK）
+// コード列を抽出
 let symbols = rows
   .map(r => String(r["コード"]).trim())
   .filter(code => code && code !== "undefined")
@@ -48,29 +48,19 @@ async function fetchSymbol(symbol) {
     const timestamps = item.timestamp;
     const q = item.indicators.quote[0];
 
-    if (!timestamps || timestamps.length < 3) {
+    if (!timestamps || timestamps.length < 2) {
       console.log(`Not enough data for ${symbol}`);
       return {
         error: "Not enough historical data"
       };
     }
 
+    // -----------------------------
+    // ★ 修正：Yahoo Finance の日付順で today / prev を決定
+    // -----------------------------
     const last = timestamps.length - 1;
-    const now = new Date();
-    const hour = now.getHours();
-
-    let todayIndex, prevIndex;
-
-    // -----------------------------
-    // 9時判定ロジック
-    // -----------------------------
-    if (hour < 9) {
-      todayIndex = last - 1;
-      prevIndex = last - 2;
-    } else {
-      todayIndex = last;
-      prevIndex = last - 1;
-    }
+    const todayIndex = last;
+    const prevIndex = last - 1;
 
     return {
       prev: {

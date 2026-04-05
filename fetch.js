@@ -9,13 +9,23 @@ const workbook = xlsx.readFile("data_j.xlsx");
 const sheet = workbook.Sheets["Sheet1"];
 const rows = xlsx.utils.sheet_to_json(sheet);
 
+// デバッグ：Excel の読み込み確認
+console.log("Excel rows count:", rows.length);
+console.log("First 3 rows:", rows.slice(0, 3));
+
 // コード列を抽出し、.T を付ける
 let symbols = rows
   .map(r => String(r["コード"]).trim())
   .filter(code => code && code !== "undefined")
   .map(code => `${code}.T`);
 
-console.log(`Loaded ${symbols.length} symbols from Excel.`);
+// デバッグ：抽出された銘柄コード
+console.log("Extracted symbols (first 20):", symbols.slice(0, 20));
+
+if (symbols.length === 0) {
+  console.log("ERROR: Excel から銘柄コードが読み取れませんでした。");
+  process.exit(1);
+}
 
 // -----------------------------
 // 2. Yahoo Finance v8 API を叩く
@@ -42,6 +52,9 @@ async function fetchChunk(chunk) {
     const res = await fetch(url);
     const json = await res.json();
 
+    // デバッグ：API の生レスポンス
+    console.log("API response sample:", JSON.stringify(json.chart, null, 2).slice(0, 500));
+
     if (!json.chart || !json.chart.result) {
       console.log("Invalid response:", json);
       return {};
@@ -51,6 +64,8 @@ async function fetchChunk(chunk) {
     const output = {};
 
     results.forEach(item => {
+      if (!item || !item.meta || !item.timestamp) return;
+
       const symbol = item.meta.symbol;
       const timestamps = item.timestamp;
       const o = item.indicators.quote[0].open;
@@ -59,7 +74,10 @@ async function fetchChunk(chunk) {
       const c = item.indicators.quote[0].close;
       const v = item.indicators.quote[0].volume;
 
-      if (!timestamps || timestamps.length < 3) return;
+      if (!timestamps || timestamps.length < 3) {
+        console.log(`Not enough data for ${symbol}`);
+        return;
+      }
 
       const last = timestamps.length - 1; // 実行日
       const now = new Date();
@@ -67,6 +85,9 @@ async function fetchChunk(chunk) {
 
       let todayIndex, prevIndex;
 
+      // -----------------------------
+      // 9時判定ロジック
+      // -----------------------------
       if (hour < 9) {
         todayIndex = last - 1; // 前日
         prevIndex = last - 2;  // 前々日
@@ -115,6 +136,9 @@ async function main() {
     await new Promise(r => setTimeout(r, 1500));
   }
 
+  // -----------------------------
+  // 5. data.json に保存
+  // -----------------------------
   fs.writeFileSync("data.json", JSON.stringify(finalData, null, 2));
   console.log("data.json updated successfully");
 }

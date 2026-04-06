@@ -51,9 +51,6 @@ async function fetchSymbol(symbol) {
       return { error: "Not enough historical data" };
     }
 
-    // -----------------------------
-    // ★ 修正：Yahoo Finance の日付順で today / prev を決定
-    // -----------------------------
     const last = timestamps.length - 1;
     const todayIndex = last;
     const prevIndex = last - 1;
@@ -105,7 +102,7 @@ async function main() {
   // -----------------------------
   // 5. バックアップ処理（JST & 絶対パス対応）
   // -----------------------------
-  const backupDir = path.join(process.cwd(), "backup", "data.json");
+  const backupDir = path.join(process.cwd(), "backup");
 
   if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
@@ -118,8 +115,7 @@ async function main() {
   const timestamp =
     now.getFullYear().toString() +
     pad(now.getMonth() + 1) +
-    pad(now.getDate()) +
-    "_" +
+    pad(now.getDate()) + "_" +
     pad(now.getHours()) +
     pad(now.getMinutes()) +
     pad(now.getSeconds());

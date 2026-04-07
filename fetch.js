@@ -2,6 +2,13 @@ import fetch from "node-fetch";
 import fs from "fs";
 import xlsx from "xlsx";
 import path from "path";
+import { fileURLToPath } from "url";
+
+// -----------------------------
+// 0. ESM で __dirname を再現（重要）
+// -----------------------------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // -----------------------------
 // 1. Excel から銘柄コードを読み込む
@@ -24,6 +31,12 @@ if (symbols.length === 0) {
   console.log("ERROR: Excel から銘柄コードが読み取れませんでした。");
   process.exit(1);
 }
+
+// -----------------------------
+// ★ 動作確認用：銘柄を 1 件だけに制限
+// -----------------------------
+symbols = symbols.slice(0, 1);
+console.log("TEMP: Limiting symbols to 1 for testing:", symbols);
 
 // -----------------------------
 // 2. Yahoo Finance API（1銘柄ずつ取得）
@@ -94,21 +107,23 @@ async function main() {
   }
 
   // -----------------------------
-  // 4. data.json を洗い替え
+  // 4. data.json を洗い替え（絶対パス）
   // -----------------------------
-  fs.writeFileSync("data.json", JSON.stringify(finalData, null, 2));
-  console.log("data.json updated successfully");
+  const dataJsonPath = path.join(__dirname, "data.json");
+
+  fs.writeFileSync(dataJsonPath, JSON.stringify(finalData, null, 2));
+  console.log("data.json updated successfully:", dataJsonPath);
 
   // -----------------------------
-  // 5. バックアップ処理（JST & 絶対パス対応）
+  // 5. バックアップ処理（絶対パス & JST）
   // -----------------------------
-  const backupDir = path.join(process.cwd(), "backup");
+  const backupDir = path.join(__dirname, "backup");
 
   if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
+    console.log("Backup directory created:", backupDir);
   }
 
-  // JST の現在時刻
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const pad = n => String(n).padStart(2, "0");
 
@@ -122,7 +137,7 @@ async function main() {
 
   const backupFile = path.join(backupDir, `data.json.${timestamp}`);
 
-  fs.copyFileSync("data.json", backupFile);
+  fs.copyFileSync(dataJsonPath, backupFile);
   console.log(`Backup created: ${backupFile}`);
 
   // -----------------------------

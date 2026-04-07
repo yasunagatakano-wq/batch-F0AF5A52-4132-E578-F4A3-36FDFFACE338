@@ -10,6 +10,12 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+console.log("=== DEBUG: PATH INFORMATION ===");
+console.log("__filename:", __filename);
+console.log("__dirname:", __dirname);
+console.log("process.cwd():", process.cwd());
+console.log("================================");
+
 // -----------------------------
 // 1. Excel から銘柄コードを読み込む
 // -----------------------------
@@ -32,9 +38,7 @@ if (symbols.length === 0) {
   process.exit(1);
 }
 
-// -----------------------------
-// ★ 動作確認用：銘柄を 1 件だけに制限
-// -----------------------------
+// ★ 動作確認用：1件だけに制限
 symbols = symbols.slice(0, 1);
 console.log("TEMP: Limiting symbols to 1 for testing:", symbols);
 
@@ -111,17 +115,32 @@ async function main() {
   // -----------------------------
   const dataJsonPath = path.join(__dirname, "data.json");
 
+  console.log("=== DEBUG: Writing data.json ===");
+  console.log("dataJsonPath:", dataJsonPath);
+
   fs.writeFileSync(dataJsonPath, JSON.stringify(finalData, null, 2));
-  console.log("data.json updated successfully:", dataJsonPath);
+  console.log("data.json updated successfully");
 
   // -----------------------------
   // 5. バックアップ処理（絶対パス & JST）
   // -----------------------------
   const backupDir = path.join(__dirname, "backup");
 
-  if (!fs.existsSync(backupDir)) {
-    fs.mkdirSync(backupDir, { recursive: true });
-    console.log("Backup directory created:", backupDir);
+  console.log("=== DEBUG: Backup Directory Check ===");
+  console.log("backupDir:", backupDir);
+  console.log("exists:", fs.existsSync(backupDir));
+  console.log("=====================================");
+
+  try {
+    if (!fs.existsSync(backupDir)) {
+      console.log("Creating backup directory...");
+      fs.mkdirSync(backupDir, { recursive: true });
+      console.log("Backup directory created.");
+    } else {
+      console.log("Backup directory already exists.");
+    }
+  } catch (err) {
+    console.log("ERROR: mkdirSync failed:", err);
   }
 
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
@@ -137,22 +156,37 @@ async function main() {
 
   const backupFile = path.join(backupDir, `data.json.${timestamp}`);
 
-  fs.copyFileSync(dataJsonPath, backupFile);
-  console.log(`Backup created: ${backupFile}`);
+  console.log("=== DEBUG: Copy Backup File ===");
+  console.log("backupFile:", backupFile);
+
+  try {
+    fs.copyFileSync(dataJsonPath, backupFile);
+    console.log("Backup created successfully.");
+  } catch (err) {
+    console.log("ERROR: copyFileSync failed:", err);
+  }
 
   // -----------------------------
   // 6. バックアップは 3 個だけ保持
   // -----------------------------
-  const files = fs
-    .readdirSync(backupDir)
-    .filter(f => f.startsWith("data.json."))
-    .sort(); // 古い順
+  console.log("=== DEBUG: Backup Cleanup ===");
 
-  while (files.length > 3) {
-    const oldFile = files.shift();
-    const oldPath = path.join(backupDir, oldFile);
-    fs.unlinkSync(oldPath);
-    console.log(`Old backup removed: ${oldPath}`);
+  try {
+    const files = fs
+      .readdirSync(backupDir)
+      .filter(f => f.startsWith("data.json."))
+      .sort();
+
+    console.log("Backup files:", files);
+
+    while (files.length > 3) {
+      const oldFile = files.shift();
+      const oldPath = path.join(backupDir, oldFile);
+      fs.unlinkSync(oldPath);
+      console.log(`Old backup removed: ${oldPath}`);
+    }
+  } catch (err) {
+    console.log("ERROR: cleanup failed:", err);
   }
 }
 

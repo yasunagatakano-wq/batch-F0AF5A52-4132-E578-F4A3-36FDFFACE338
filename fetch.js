@@ -21,7 +21,7 @@ if (symbols.length === 0) {
 }
 
 // ★ 動作確認用：1件だけに制限
-symbols = symbols.slice(0, 1);
+symbols = symbols.slice(0, 2);
 
 // -----------------------------
 // 2. Yahoo Finance API（1銘柄ずつ取得）

@@ -111,14 +111,14 @@ async function main() {
   fs.copyFileSync("data.json", backupFile);
 
   // -----------------------------
-  // 6. バックアップは 3 個だけ保持
+  // 6. バックアップは 8 個だけ保持
   // -----------------------------
   const files = fs
     .readdirSync(backupDir)
     .filter(f => f.startsWith("data.json."))
     .sort();
 
-  while (files.length > 3) {
+  while (files.length > 8) {
     const oldFile = files.shift();
     const oldPath = path.join(backupDir, oldFile);
     fs.unlinkSync(oldPath);

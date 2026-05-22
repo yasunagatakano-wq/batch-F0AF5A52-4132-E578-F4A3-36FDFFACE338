@@ -1,0 +1,75 @@
+name: JPX data_j.xls fetch & convert (scraping)
+
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 毎日 10:00 JST（1:00 UTC）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-convert-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libreoffice python3 python3-pip
+          pip3 install requests beautifulsoup4 lxml
+
+      - name: Scrape JPX page to get data_j.xls URL
+        id: scrape
+        run: |
+          python3 << 'EOF'
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+
+# JPX ページ
+url = "https://www.jpx.co.jp/markets/statistics-equities/misc/01.html"
+
+# ルート URL を自動抽出（ハードコーディング回避）
+parsed = urlparse(url)
+root = f"{parsed.scheme}://{parsed.netloc}"
+
+# HTML 取得
+html = requests.get(url).text
+soup = BeautifulSoup(html, "lxml")
+
+# data_j.xls を含むリンクを探索
+link = None
+for a in soup.find_all("a", href=True):
+    if "data_j.xls" in a["href"]:
+        link = a["href"]
+        break
+
+if not link:
+    raise Exception("data_j.xls のリンクが見つかりませんでした")
+
+# 絶対 URL 化
+if link.startswith("/"):
+    link = root + link
+
+print(f"::set-output name=url::{link}")
+EOF
+
+      - name: Download data_j.xls
+        run: |
+          curl -L "${{ steps.scrape.outputs.url }}" -o data_j.xls
+
+      - name: Convert XLS → XLSX
+        run: |
+          libreoffice --headless --convert-to xlsx data_j.xls --outdir .
+
+      - name: Commit & Push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add data_j.xls data_j.xlsx
+          git commit -m "Auto-update JPX data_j.xls → xlsx" || echo "No changes to commit"
+          git push

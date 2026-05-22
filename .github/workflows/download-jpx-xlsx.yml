@@ -61,23 +61,27 @@ jobs:
       - name: Convert XLS → XLSX (temporary name)
         run: |
           libreoffice --headless --convert-to xlsx data_j.xls --outdir .
-          mv data_j.xlsx data_j_test.xlsx
+          mv data_j.xlsx data_j.xlsx
 
-      - name: Backup original and converted files
+      - name: Backup files (JST timestamp)
         run: |
           mkdir -p backup
-          TS=$(date +"%Y%m%d_%H%M%S")
+          TS=$(TZ='Asia/Tokyo' date +"%Y%m%d_%H%M%S")
           cp data_j.xls backup/data_j.xls.$TS
-          cp data_j_test.xlsx backup/data_j_test.xlsx.$TS
+          cp data_j.xlsx backup/data_j.xlsx.$TS
+
+      - name: Remove data_j.xls (not needed after backup)
+        run: |
+          rm data_j.xls
 
       - name: Cleanup old backups (older than 3 days)
         run: |
-          find backup -type f \( -name "data_j.xls.*" -o -name "data_j_test.xlsx.*" \) -mtime +3 -exec rm {} \;
+          find backup -type f \( -name "data_j.xls.*" -o -name "data_j.xlsx.*" \) -mtime +3 -exec rm {} \;
 
       - name: Commit & Push
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add data_j.xls data_j_test.xlsx backup/
-          git commit -m "Auto-update JPX data_j + backup" || echo "No changes to commit"
+          git add data_j.xlsx backup/
+          git commit -m "Auto-update JPX data_j.xlsx + backup (JST timestamp)" || echo "No changes to commit"
           git push

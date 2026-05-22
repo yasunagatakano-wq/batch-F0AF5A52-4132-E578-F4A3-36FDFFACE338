@@ -68,5 +68,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add data_j.xls data_j_test.xlsx
-          git commit -m "Auto-update JPX data_j.xls → data_j_test.xlsx (temporary)" || echo "No changes to commit"
+          git commit -m "Auto-update JPX data_j.xls → data_j_test1.xlsx (temporary)" || echo "No changes to commit"
           git push

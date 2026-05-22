@@ -25,20 +25,24 @@ jobs:
       - name: Scrape JPX page to get data_j.xls URL
         id: scrape
         run: |
-          python3 << 'EOF'
+          python3 << EOF
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 import os
 
+# JPX ページ
 url = "https://www.jpx.co.jp/markets/statistics-equities/misc/01.html"
 
+# ルート URL を自動抽出
 parsed = urlparse(url)
 root = f"{parsed.scheme}://{parsed.netloc}"
 
+# HTML 取得
 html = requests.get(url).text
 soup = BeautifulSoup(html, "lxml")
 
+# data_j.xls を含むリンクを探索
 link = None
 for a in soup.find_all("a", href=True):
     if "data_j.xls" in a["href"]:
@@ -48,10 +52,11 @@ for a in soup.find_all("a", href=True):
 if not link:
     raise Exception("data_j.xls のリンクが見つかりませんでした")
 
+# 絶対 URL 化
 if link.startswith("/"):
     link = root + link
 
-# GitHub Actions の新しい出力方式（GITHUB_OUTPUT）を使用
+# GitHub Actions の新しい出力方式
 with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
     f.write(f"url={link}\n")
 EOF

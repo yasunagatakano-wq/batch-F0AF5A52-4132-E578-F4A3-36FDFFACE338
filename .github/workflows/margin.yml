@@ -2,7 +2,7 @@ name: Margin Info Fetch (taisyaku.jp + Rakuten)
 
 on:
   schedule:
-    - cron: "0 18 * * *"
+    - cron: "0 18 * * *"   # JST 3:00（UTC 18:00）
   workflow_dispatch:
 
 permissions:
@@ -36,34 +36,45 @@ jobs:
           base = "https://www.taisyaku.jp/data/"
 
           # ============================
-          # 1. CSV 読み込み
+          # 1. meigara.csv / zandaka.csv
           # ============================
           meigara_df = pd.read_csv(base + "meigara.csv", encoding="shift_jis", dtype=str)
           zandaka_df = pd.read_csv(base + "zandaka.csv", encoding="shift_jis", dtype=str)
 
-          seigenichiran_df = pd.read_csv(
+          # ============================
+          # 2. seigenichiran.csv（先頭4行スキップ + 末尾3行削除 + 空欄列削除）
+          # ============================
+          sei_df = pd.read_csv(
               base + "seigenichiran.csv",
               encoding="shift_jis",
               dtype=str,
               skiprows=4
           )
 
-          # ★ 列名の不可視文字を除去
-          seigenichiran_df.columns = seigenichiran_df.columns.str.strip()
-          seigenichiran_df.columns = seigenichiran_df.columns.str.replace("\ufeff", "", regex=False)
+          # 列名の不可視文字除去
+          sei_df.columns = sei_df.columns.str.strip().str.replace("\ufeff", "", regex=False)
+
+          # 末尾3行削除（サマリ行）
+          sei_df = sei_df.iloc[:-3]
+
+          # 1列目が空欄（直近発表列）なので削除
+          sei_df = sei_df.drop(sei_df.columns[0], axis=1)
+
+          # 列名を再度クリーン
+          sei_df.columns = sei_df.columns.str.strip().str.replace("\ufeff", "", regex=False)
 
           # ============================
-          # 2. 貸借銘柄
+          # 3. 貸借銘柄（制度信用）
           # ============================
           taisyaku_set = set()
           for _, row in meigara_df.iterrows():
               code = str(row["銘柄コード"]).zfill(4)
-              kubun = row["区分"]
+              kubun = row["区分"]  # 1=貸借、2=融資、0=非制度
               if kubun in ("1", "2"):
                   taisyaku_set.add(code)
 
           # ============================
-          # 3. 信用残
+          # 4. 信用残（買残・売残）
           # ============================
           zandaka_map = {}
           for _, row in zandaka_df.iterrows():
@@ -76,16 +87,16 @@ jobs:
               }
 
           # ============================
-          # 4. 規制情報
+          # 5. 規制情報（実施措置 + 実施内容）
           # ============================
           regulation_map = {}
-          for _, row in seigenichiran_df.iterrows():
+          for _, row in sei_df.iterrows():
               code = str(row["銘柄コード"]).zfill(4)
               reason = f'{row["実施措置"]}:{row["実施内容"]}'
               regulation_map.setdefault(code, []).append(reason)
 
           # ============================
-          # 5. 楽天 一般信用
+          # 6. 楽天証券 一般信用（売り建て）
           # ============================
           rakuten_url = "https://www.rakuten-sec.co.jp/web/market/search/general_margin/"
           html = requests.get(rakuten_url, headers=UA).text
@@ -97,7 +108,7 @@ jobs:
               if len(cols) >= 3:
                   code = cols[0].get_text(strip=True)
                   if re.fullmatch(r"\d{4}", code):
-                      status = cols[2].get_text(strip=True)
+                      status = cols[2].get_text(strip=True)  # ◎ / ○ / △ / ×
                       general_map[code] = {
                           "売り建て": status != "×",
                           "在庫区分": status,
@@ -105,7 +116,7 @@ jobs:
                       }
 
           # ============================
-          # 6. margin.json 統合
+          # 7. margin.json 統合
           # ============================
           margin = {}
           all_codes = set(zandaka_map.keys()) | set(taisyaku_set)

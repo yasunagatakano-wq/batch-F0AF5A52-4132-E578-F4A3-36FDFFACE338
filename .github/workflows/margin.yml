@@ -134,6 +134,7 @@ jobs:
               return int(s)
 
           for block in blocks:
+              # 銘柄コード
               m = re.search(r"(\d{5})\s+JP\d{10}", block)
               if not m:
                   continue
@@ -141,10 +142,14 @@ jobs:
               code5 = m.group(1)
               code4 = code5[:4]
 
-              # ブロック内の数字を全部抜く
-              nums = re.findall(r"[▲\-]?\s*[\d,]+", block)
+              # ISIN の後ろだけを切り出す（ここが重要）
+              after_isin = re.split(r"JP\d{10}", block)[1]
+
+              # 数字だけ抽出（銘柄コード・ISIN を除外）
+              nums = re.findall(r"[▲\-]?\s*[\d,]+", after_isin)
               nums = [n.replace(" ", "").replace(",", "") for n in nums]
 
+              # 最低4つ必要（売残・売残前週比・買残・買残前週比）
               if len(nums) < 4:
                   continue
 

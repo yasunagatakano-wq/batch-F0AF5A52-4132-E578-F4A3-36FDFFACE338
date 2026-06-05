@@ -1,4 +1,4 @@
-name: Margin Info Fetch (JSF/JPX scraping)
+name: Margin Info Fetch (JSF/JPX scraping via JSON API)
 
 on:
   schedule:
@@ -26,18 +26,16 @@ jobs:
         shell: python
         run: |
           import requests
-          import pandas as pd
-          from bs4 import BeautifulSoup
           import json
           import re
+          from bs4 import BeautifulSoup
 
-          BASE = "https://www.jsf.co.jp"
           UA = {"User-Agent": "Mozilla/5.0"}
 
           # ============================
           # 1. JSF 貸借銘柄一覧（制度信用）
           # ============================
-          taisyaku_url = f"{BASE}/de/stock/stock_01.php"
+          taisyaku_url = "https://www.jsf.co.jp/de/stock/stock_01.php"
           html = requests.get(taisyaku_url, headers=UA).text
           soup = BeautifulSoup(html, "lxml")
 
@@ -50,79 +48,35 @@ jobs:
                       taisyaku_set.add(code)
 
           # ============================
-          # 2. 週末残高 CSV（stock_03.php からリンク抽出）
+          # 2. JSF JSON API（週末残高）
           # ============================
-          weekly_page = f"{BASE}/de/stock/stock_03.php"
-          html = requests.get(weekly_page, headers=UA).text
-          soup = BeautifulSoup(html, "lxml")
-
-          weekly_csv = None
-          for a in soup.find_all("a", href=True):
-              href = a["href"]
-              if "stock_03" in href and href.endswith(".csv"):
-                  weekly_csv = href
-                  break
-
-          if not weekly_csv:
-              raise Exception("週末残高 CSV が見つかりません（stock_03*.csv のリンクがありません）")
-
-          if weekly_csv.startswith("/"):
-              weekly_csv = BASE + weekly_csv
-          elif not weekly_csv.startswith("http"):
-              weekly_csv = BASE + "/de/stock/" + weekly_csv.lstrip("./")
-
-          # ============================
-          # 3. 日々公表 CSV（stock_04.php からリンク抽出）
-          # ============================
-          daily_page = f"{BASE}/de/stock/stock_04.php"
-          html = requests.get(daily_page, headers=UA).text
-          soup = BeautifulSoup(html, "lxml")
-
-          daily_csv = None
-          for a in soup.find_all("a", href=True):
-              href = a["href"]
-              if "stock_04" in href and href.endswith(".csv"):
-                  daily_csv = href
-                  break
-
-          if daily_csv:
-              if daily_csv.startswith("/"):
-                  daily_csv = BASE + daily_csv
-              elif not daily_csv.startswith("http"):
-                  daily_csv = BASE + "/de/stock/" + daily_csv.lstrip("./")
-
-          # ============================
-          # 4. CSV 読み込み
-          # ============================
-          weekly_df = pd.read_csv(weekly_csv, encoding="shift_jis", dtype=str)
-          weekly_df = weekly_df.rename(columns=lambda x: x.strip())
+          weekly_url = "https://www.jsf.co.jp/data/stock/stock_03.json"
+          weekly_json = requests.get(weekly_url, headers=UA).json()
 
           weekly_map = {}
-          for _, row in weekly_df.iterrows():
-              code = row["銘柄コード"].zfill(4)
-              buy = row.get("買残高")
-              sell = row.get("売残高")
+          for item in weekly_json.get("data", []):
+              code = str(item.get("code", "")).zfill(4)
               weekly_map[code] = {
-                  "buy": int(buy) if str(buy).isdigit() else None,
-                  "sell": int(sell) if str(sell).isdigit() else None
+                  "buy": item.get("buyBalance"),
+                  "sell": item.get("sellBalance")
               }
 
-          daily_map = {}
-          if daily_csv:
-              daily_df = pd.read_csv(daily_csv, encoding="shift_jis", dtype=str)
-              daily_df = daily_df.rename(columns=lambda x: x.strip())
+          # ============================
+          # 3. JSF JSON API（日々公表）
+          # ============================
+          daily_url = "https://www.jsf.co.jp/data/stock/stock_04.json"
+          daily_json = requests.get(daily_url, headers=UA).json()
 
-              for _, row in daily_df.iterrows():
-                  code = row["銘柄コード"].zfill(4)
-                  buy = row.get("買残高")
-                  sell = row.get("売残高")
-                  daily_map[code] = {
-                      "buy": int(buy) if str(buy).isdigit() else None,
-                      "sell": int(sell) if str(sell).isdigit() else None
-                  }
+          daily_map = {}
+          for item in daily_json.get("data", []):
+              code = str(item.get("code", "")).zfill(4)
+              daily_map[code] = {
+                  "buy": item.get("buyBalance"),
+                  "sell": item.get("sellBalance")
+              }
 
           # ============================
-          # 5. JPX 規制情報
+          # 4. JPX 規制情報
           # ============================
           jpx_url = "https://www.jpx.co.jp/regulation/alert/index.html"
           html = requests.get(jpx_url, headers=UA).text
@@ -138,7 +92,7 @@ jobs:
                       regulation_map.setdefault(code, []).append(reason)
 
           # ============================
-          # 6. 統合して margin.json を生成
+          # 5. 統合して margin.json を生成
           # ============================
           margin = {}
 
@@ -177,5 +131,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json (JSF/JPX scraping)" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (JSF JSON API)" || echo "No changes to commit"
           git push

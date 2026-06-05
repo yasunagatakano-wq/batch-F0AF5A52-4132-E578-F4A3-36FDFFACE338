@@ -2,7 +2,7 @@ name: Margin Info Fetch (taisyaku.jp + Rakuten)
 
 on:
   schedule:
-    - cron: "0 18 * * *"   # JST 3:00（UTC 18:00）
+    - cron: "0 18 * * *"
   workflow_dispatch:
 
 permissions:
@@ -33,15 +33,14 @@ jobs:
 
           UA = {"User-Agent": "Mozilla/5.0"}
 
-          # ============================
-          # 1. taisyaku.jp CSV 取得
-          # ============================
           base = "https://www.taisyaku.jp/data/"
 
+          # ============================
+          # 1. CSV 読み込み
+          # ============================
           meigara_df = pd.read_csv(base + "meigara.csv", encoding="shift_jis", dtype=str)
           zandaka_df = pd.read_csv(base + "zandaka.csv", encoding="shift_jis", dtype=str)
 
-          # ★ seigenichiran.csv は先頭4行が説明文 → skiprows=4
           seigenichiran_df = pd.read_csv(
               base + "seigenichiran.csv",
               encoding="shift_jis",
@@ -49,18 +48,22 @@ jobs:
               skiprows=4
           )
 
+          # ★ 列名の不可視文字を除去
+          seigenichiran_df.columns = seigenichiran_df.columns.str.strip()
+          seigenichiran_df.columns = seigenichiran_df.columns.str.replace("\ufeff", "", regex=False)
+
           # ============================
-          # 2. 貸借銘柄（制度信用）
+          # 2. 貸借銘柄
           # ============================
           taisyaku_set = set()
           for _, row in meigara_df.iterrows():
               code = str(row["銘柄コード"]).zfill(4)
-              kubun = row["区分"]  # 1=貸借、2=融資、0=非制度
+              kubun = row["区分"]
               if kubun in ("1", "2"):
                   taisyaku_set.add(code)
 
           # ============================
-          # 3. 信用残（買残・売残）
+          # 3. 信用残
           # ============================
           zandaka_map = {}
           for _, row in zandaka_df.iterrows():
@@ -73,7 +76,7 @@ jobs:
               }
 
           # ============================
-          # 4. 規制情報（seigenichiran.csv）
+          # 4. 規制情報
           # ============================
           regulation_map = {}
           for _, row in seigenichiran_df.iterrows():
@@ -82,7 +85,7 @@ jobs:
               regulation_map.setdefault(code, []).append(reason)
 
           # ============================
-          # 5. 楽天証券 一般信用（売り建て）
+          # 5. 楽天 一般信用
           # ============================
           rakuten_url = "https://www.rakuten-sec.co.jp/web/market/search/general_margin/"
           html = requests.get(rakuten_url, headers=UA).text
@@ -94,7 +97,7 @@ jobs:
               if len(cols) >= 3:
                   code = cols[0].get_text(strip=True)
                   if re.fullmatch(r"\d{4}", code):
-                      status = cols[2].get_text(strip=True)  # ◎ / ○ / △ / ×
+                      status = cols[2].get_text(strip=True)
                       general_map[code] = {
                           "売り建て": status != "×",
                           "在庫区分": status,

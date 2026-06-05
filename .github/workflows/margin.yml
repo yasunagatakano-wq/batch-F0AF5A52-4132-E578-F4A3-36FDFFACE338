@@ -35,7 +35,7 @@ jobs:
           UA = {"User-Agent": "Mozilla/5.0"}
 
           # ============================
-          # 1. JSF meigara.csv
+          # JSF meigara.csv
           # ============================
           base = "https://www.taisyaku.jp/data/"
           meigara_df = pd.read_csv(
@@ -47,7 +47,7 @@ jobs:
           meigara_df.columns = meigara_df.columns.str.strip().str.replace("\ufeff", "", regex=False)
 
           # ============================
-          # 2. JSF zandaka.csv
+          # JSF zandaka.csv
           # ============================
           zandaka_df = pd.read_csv(
               base + "zandaka.csv",
@@ -82,7 +82,7 @@ jobs:
               raise Exception("制度信用残の列名が見つかりません")
 
           # ============================
-          # 3. JSF seigenichiran.csv
+          # JSF seigenichiran.csv
           # ============================
           sei_df = pd.read_csv(
               base + "seigenichiran.csv",
@@ -94,7 +94,7 @@ jobs:
           sei_df.columns = sei_df.columns.str.strip().str.replace("\ufeff", "", regex=False)
 
           # ============================
-          # 4. 貸借銘柄
+          # 貸借銘柄
           # ============================
           taisyaku_set = set()
           for _, row in meigara_df.iterrows():
@@ -104,7 +104,7 @@ jobs:
                   taisyaku_set.add(code)
 
           # ============================
-          # 5. JSF 制度信用残
+          # JSF 制度信用残
           # ============================
           zandaka_map = {}
           for _, row in zandaka_df.iterrows():
@@ -117,7 +117,7 @@ jobs:
               }
 
           # ============================
-          # 6. 規制情報
+          # 規制情報
           # ============================
           regulation_map = {}
           for _, row in sei_df.iterrows():
@@ -126,7 +126,7 @@ jobs:
               regulation_map.setdefault(code, []).append(reason)
 
           # ============================
-          # 7. 楽天 一般信用
+          # 楽天 一般信用
           # ============================
           rakuten_url = "https://www.rakuten-sec.co.jp/web/market/search/general_margin/"
           html = requests.get(rakuten_url, headers=UA).text
@@ -146,22 +146,21 @@ jobs:
                       }
 
           # ============================
-          # 8. JPX 週末信用残（PDF 自動取得）
+          # JPX 週末信用残（05.html から取得）
           # ============================
-          jpx_dir = "https://www.jpx.co.jp/markets/statistics-equities/margin/tvdivq0000001rnl-att/"
-          jpx_html = requests.get(jpx_dir, headers=UA).text
+          jpx_page = "https://www.jpx.co.jp/markets/statistics-equities/margin/05.html"
+          jpx_html = requests.get(jpx_page, headers=UA).text
           jpx_soup = BeautifulSoup(jpx_html, "lxml")
 
           pdf_links = []
           for a in jpx_soup.find_all("a", href=True):
               href = a["href"]
               if href.endswith(".pdf") and "syumatsu" in href:
-                  pdf_links.append(jpx_dir + href.split("/")[-1])
+                  pdf_links.append("https://www.jpx.co.jp" + href)
 
           if not pdf_links:
-              raise Exception("JPX 週末信用残 PDF が見つかりません")
+              raise Exception("JPX 週末信用残 PDF が見つかりません（05.html 構造変更の可能性）")
 
-          # 最新 PDF を選択
           latest_pdf = sorted(pdf_links)[-1]
 
           # PDF ダウンロード
@@ -206,7 +205,7 @@ jobs:
                       }
 
           # ============================
-          # 9. margin.json 統合
+          # margin.json 統合
           # ============================
           margin = {}
           all_codes = set(zandaka_map.keys()) | set(taisyaku_set) | set(jpx_map.keys())

@@ -170,6 +170,14 @@ jobs:
               r"(\d{5})\s+JP\d{10}\s+([\d,]+)\s+([▲\-\d,]+)\s+([\d,]+)\s+([▲\-\d,]+)"
           )
 
+          def parse_diff(s):
+              s = s.replace(",", "")
+              if s in ("▲", "-", ""):
+                  return 0
+              if s.startswith("▲"):
+                  return -int(s[1:])
+              return int(s)
+
           with pdfplumber.open("jpx.pdf") as pdf:
               for page in pdf.pages:
                   text = page.extract_text()
@@ -183,10 +191,10 @@ jobs:
                           code4 = code5[:4]
 
                           sell = int(m.group(2).replace(",", ""))
-                          sell_diff = int(m.group(3).replace(",", "").replace("▲", "-"))
+                          sell_diff = parse_diff(m.group(3))
 
                           buy = int(m.group(4).replace(",", ""))
-                          buy_diff = int(m.group(5).replace(",", "").replace("▲", "-"))
+                          buy_diff = parse_diff(m.group(5))
 
                           ratio = round(buy / sell, 2) if sell != 0 else None
 

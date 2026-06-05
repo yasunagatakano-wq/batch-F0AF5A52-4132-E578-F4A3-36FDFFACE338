@@ -61,15 +61,19 @@ jobs:
 
           for a in soup.find_all("a", href=True):
               href = a["href"]
-              if "margin_weekly" in href and href.endswith(".csv"):
+
+              # 週末残高（weekly）
+              if "stock_03" in href and href.endswith(".csv"):
                   weekly_csv = href
-              if "margin_daily" in href and href.endswith(".csv"):
+
+              # 日々公表（daily）
+              if "stock_04" in href and href.endswith(".csv"):
                   daily_csv = href
 
           if weekly_csv:
               weekly_csv = BASE + weekly_csv
           else:
-              raise Exception("週末残高 CSV が見つかりません")
+              raise Exception("週末残高 CSV が見つかりません（stock_03_*.csv が存在しません）")
 
           if daily_csv:
               daily_csv = BASE + daily_csv

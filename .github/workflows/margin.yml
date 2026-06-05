@@ -1,4 +1,4 @@
-name: Margin Info Fetch (taisyaku.jp + Rakuten + JPX)
+name: Margin Info Fetch (JPX Only)
 
 on:
   schedule:
@@ -35,7 +35,7 @@ jobs:
           UA = {"User-Agent": "Mozilla/5.0"}
 
           # ============================
-          # JSF meigara.csv
+          # JSF meigara.csv（貸借銘柄判定用）
           # ============================
           base = "https://www.taisyaku.jp/data/"
           meigara_df = pd.read_csv(
@@ -46,40 +46,15 @@ jobs:
           )
           meigara_df.columns = meigara_df.columns.str.strip().str.replace("\ufeff", "", regex=False)
 
-          # ============================
-          # JSF zandaka.csv
-          # ============================
-          zandaka_df = pd.read_csv(
-              base + "zandaka.csv",
-              encoding="shift_jis",
-              dtype=str
-          )
-          zandaka_df.columns = zandaka_df.columns.str.strip().str.replace("\ufeff", "", regex=False)
-
-          # 制度信用残の列名検出
-          buy_col = None
-          sell_col = None
-
-          for col in zandaka_df.columns:
-              if col == "制度信用・買残高株数":
-                  buy_col = col
-              if col == "制度信用・売残高株数":
-                  sell_col = col
-
-          if buy_col is None:
-              for col in zandaka_df.columns:
-                  if "制度信用" in col and "買残高株数" in col:
-                      buy_col = col
-                      break
-
-          if sell_col is None:
-              for col in zandaka_df.columns:
-                  if "制度信用" in col and "売残高株数" in col:
-                      sell_col = col
-                      break
+          taisyaku_set = set()
+          for _, row in meigara_df.iterrows():
+              code = str(row["コード"]).zfill(4)
+              kubun = row["貸借銘柄区分（東証）"]
+              if kubun in ("1", "2"):
+                  taisyaku_set.add(code)
 
           # ============================
-          # JSF seigenichiran.csv
+          # JSF seigenichiran.csv（規制情報）
           # ============================
           sei_df = pd.read_csv(
               base + "seigenichiran.csv",
@@ -90,32 +65,6 @@ jobs:
           sei_df = sei_df.iloc[:-3]
           sei_df.columns = sei_df.columns.str.strip().str.replace("\ufeff", "", regex=False)
 
-          # ============================
-          # 貸借銘柄
-          # ============================
-          taisyaku_set = set()
-          for _, row in meigara_df.iterrows():
-              code = str(row["コード"]).zfill(4)
-              kubun = row["貸借銘柄区分（東証）"]
-              if kubun in ("1", "2"):
-                  taisyaku_set.add(code)
-
-          # ============================
-          # JSF 制度信用残
-          # ============================
-          zandaka_map = {}
-          for _, row in zandaka_df.iterrows():
-              code = str(row["銘柄コード"]).zfill(4)
-              buy  = row.get(buy_col)
-              sell = row.get(sell_col)
-              zandaka_map[code] = {
-                  "buy": int(buy) if str(buy).isdigit() else None,
-                  "sell": int(sell) if str(sell).isdigit() else None
-              }
-
-          # ============================
-          # 規制情報
-          # ============================
           regulation_map = {}
           for _, row in sei_df.iterrows():
               code = str(row["銘柄コード"]).zfill(4)
@@ -166,12 +115,13 @@ jobs:
           # ============================
           jpx_map = {}
 
+          # ▲ と数字の間にスペースが入るケースに対応
           pattern = re.compile(
-              r"(\d{5})\s+JP\d{10}\s+([\d,]+)\s+([▲\-\d,]+)\s+([\d,]+)\s+([▲\-\d,]+)"
+              r"(\d{5})\s+JP\d{10}\s+([\d,]+)\s+([▲\-\d,\s]+)\s+([\d,]+)\s+([▲\-\d,\s]+)"
           )
 
           def parse_diff(s):
-              s = s.replace(",", "")
+              s = s.replace(",", "").replace(" ", "")
               if s in ("▲", "-", ""):
                   return 0
               if s.startswith("▲"):
@@ -207,27 +157,21 @@ jobs:
                           }
 
           # ============================
-          # margin.json 統合
+          # margin.json 統合（JSF 信用残は削除）
           # ============================
           margin = {}
-          all_codes = set(zandaka_map.keys()) | set(taisyaku_set) | set(jpx_map.keys())
+          all_codes = set(taisyaku_set) | set(jpx_map.keys()) | set(general_map.keys())
 
           for code in sorted(all_codes):
-              jsf_buy  = zandaka_map.get(code, {}).get("buy")
-              jsf_sell = zandaka_map.get(code, {}).get("sell")
-
               jpx = jpx_map.get(code, {})
 
               margin[code] = {
                   "貸借銘柄": code in taisyaku_set,
-                  "制度信用": code in taisyaku_set,
                   "一般信用": general_map.get(code, {
                       "売り建て": False,
                       "在庫区分": None,
                       "在庫数量": None
                   }),
-                  "信用買い残": jsf_buy,
-                  "信用売り残": jsf_sell,
                   "JPX信用買残": jpx.get("buy"),
                   "JPX信用買残前週比": jpx.get("buy_diff"),
                   "JPX信用売残": jpx.get("sell"),

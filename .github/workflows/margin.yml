@@ -1,4 +1,4 @@
-name: Margin Info Fetch (JSF/JPX scraping via RSS + PDF text)
+name: Margin Info Fetch (taisyaku.jp CSV)
 
 on:
   schedule:
@@ -19,110 +19,72 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 python3-pip poppler-utils
-          pip3 install requests beautifulsoup4 lxml pandas
+          sudo apt-get install -y python3 python3-pip
+          pip3 install requests pandas
 
       - name: Run margin-info scraper
         shell: python
         run: |
           import requests
-          import json
-          import re
-          import subprocess
           import pandas as pd
-          from bs4 import BeautifulSoup
+          import json
 
-          UA = {"User-Agent": "Mozilla/5.0"}
-
-          # ============================
-          # 1. JSF 貸借銘柄一覧
-          # ============================
-          taisyaku_url = "https://www.jsf.co.jp/de/stock/stock_01.php"
-          html = requests.get(taisyaku_url, headers=UA).text
-          soup = BeautifulSoup(html, "lxml")
-
-          taisyaku_set = set()
-          for row in soup.select("table tr"):
-              cols = row.find_all("td")
-              if len(cols) >= 2:
-                  code = cols[0].get_text(strip=True)
-                  if re.fullmatch(r"\d{4}", code):
-                      taisyaku_set.add(code)
+          BASE = "https://www.taisyaku.jp/download/"
 
           # ============================
-          # 2. RSS から最新 CSV/PDF を取得
+          # 1. CSV ダウンロード
           # ============================
-          def get_latest_file(rss_url):
-              xml = requests.get(rss_url, headers=UA).text
-              soup = BeautifulSoup(xml, "xml")
-              link = soup.find("link")
-              if not link:
-                  return None
-              return link.text.strip()
+          weekly_url = BASE + "syuyou_weekly.csv"
+          daily_url  = BASE + "syuyou_daily.csv"
+          list_url   = BASE + "taisyaku_list.csv"
+          reg_url    = BASE + "regulation.csv"
 
-          weekly_link = get_latest_file("https://www.jsf.co.jp/de/stock/stock_03.xml")
-          daily_link  = get_latest_file("https://www.jsf.co.jp/de/stock/stock_04.xml")
-
-          # ============================
-          # 3. CSV or PDF を読み込む
-          # ============================
-          def load_jsf_file(url):
-              if url.endswith(".csv"):
-                  df = pd.read_csv(url, encoding="shift_jis", dtype=str)
-                  df = df.rename(columns=lambda x: x.strip())
-                  result = {}
-                  for _, row in df.iterrows():
-                      code = row["銘柄コード"].zfill(4)
-                      buy = row.get("買残高")
-                      sell = row.get("売残高")
-                      result[code] = {
-                          "buy": int(buy) if str(buy).isdigit() else None,
-                          "sell": int(sell) if str(sell).isdigit() else None
-                      }
-                  return result
-
-              elif url.endswith(".pdf"):
-                  # PDF → テキスト
-                  subprocess.run(["curl", "-L", url, "-o", "tmp.pdf"], check=True)
-                  subprocess.run(["pdftotext", "tmp.pdf", "tmp.txt"], check=True)
-
-                  text = open("tmp.txt", encoding="utf-8").read()
-
-                  # 正規表現で抽出（例：1234  12345  6789）
-                  pattern = re.compile(r"(\d{4})\s+(\d+)\s+(\d+)")
-                  result = {}
-                  for code, buy, sell in pattern.findall(text):
-                      result[code] = {
-                          "buy": int(buy),
-                          "sell": int(sell)
-                      }
-                  return result
-
-              return {}
-
-          weekly_map = load_jsf_file(weekly_link)
-          daily_map  = load_jsf_file(daily_link)
+          weekly_df = pd.read_csv(weekly_url, encoding="shift_jis", dtype=str)
+          daily_df  = pd.read_csv(daily_url,  encoding="shift_jis", dtype=str)
+          list_df   = pd.read_csv(list_url,   encoding="shift_jis", dtype=str)
+          reg_df    = pd.read_csv(reg_url,    encoding="shift_jis", dtype=str)
 
           # ============================
-          # 4. JPX 規制情報
+          # 2. 貸借銘柄一覧
           # ============================
-          jpx_url = "https://www.jpx.co.jp/regulation/alert/index.html"
-          html = requests.get(jpx_url, headers=UA).text
-          soup = BeautifulSoup(html, "lxml")
+          taisyaku_set = set(list_df["銘柄コード"].astype(str).str.zfill(4))
 
+          # ============================
+          # 3. 週末残高
+          # ============================
+          weekly_map = {}
+          for _, row in weekly_df.iterrows():
+              code = str(row["銘柄コード"]).zfill(4)
+              weekly_map[code] = {
+                  "buy": int(row["買残"]) if row["買残"].isdigit() else None,
+                  "sell": int(row["売残"]) if row["売残"].isdigit() else None
+              }
+
+          # ============================
+          # 4. 日々公表
+          # ============================
+          daily_map = {}
+          for _, row in daily_df.iterrows():
+              code = str(row["銘柄コード"]).zfill(4)
+              daily_map[code] = {
+                  "buy": int(row["買残"]) if row["買残"].isdigit() else None,
+                  "sell": int(row["売残"]) if row["売残"].isdigit() else None
+              }
+
+          # ============================
+          # 5. 規制情報
+          # ============================
           regulation_map = {}
-          for row in soup.select("table tr"):
-              cols = row.find_all("td")
-              if len(cols) >= 2:
-                  code = cols[0].get_text(strip=True)
-                  if re.fullmatch(r"\d{4}", code):
-                      reason = cols[1].get_text(strip=True)
-                      regulation_map.setdefault(code, []).append(reason)
+          for _, row in reg_df.iterrows():
+              code = str(row["銘柄コード"]).zfill(4)
+              reason = row["規制内容"]
+              regulation_map.setdefault(code, []).append(reason)
 
           # ============================
-          # 5. 統合して margin.json を生成
+          # 6. margin.json を生成
           # ============================
           margin = {}
+
           all_codes = set(weekly_map.keys()) | set(daily_map.keys()) | set(taisyaku_set)
 
           for code in sorted(all_codes):
@@ -158,5 +120,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json (JSF RSS + PDF text)" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (taisyaku.jp CSV)" || echo "No changes to commit"
           git push

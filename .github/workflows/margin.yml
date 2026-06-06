@@ -20,7 +20,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip
-          pip3 install requests pandas beautifulsoup4 lxml pdfplumber openpyxl xlrd==1.2.0
+          pip3 install requests pandas beautifulsoup4 lxml pdfplumber openpyxl xlrd==2.0.1
 
       - name: Run margin-info scraper
         shell: python
@@ -137,7 +137,8 @@ jobs:
           else:
               daily_url = latest_daily
 
-          daily_df = pd.read_excel(daily_url, dtype=str)
+          # ★ xlrd 2.0.1 で XML .xls を読む
+          daily_df = pd.read_excel(daily_url, dtype=str, engine="xlrd")
 
           daily_df.columns = daily_df.columns.str.strip()
           daily_df = daily_df.dropna(subset=[daily_df.columns[0]])

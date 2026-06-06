@@ -1,4 +1,4 @@
-name: Margin Info Fetch (JPX Only)
+name: Margin Info Fetch (Daily Override)
 
 on:
   schedule:
@@ -20,7 +20,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip
-          pip3 install requests pandas beautifulsoup4 lxml pdfplumber
+          pip3 install requests pandas beautifulsoup4 lxml pdfplumber openpyxl
 
       - name: Run margin-info scraper
         shell: python
@@ -35,7 +35,7 @@ jobs:
           UA = {"User-Agent": "Mozilla/5.0"}
 
           # ============================
-          # JSF meigara.csv（貸借銘柄判定用）
+          # JSF meigara.csv（貸借銘柄）
           # ============================
           base = "https://www.taisyaku.jp/data/"
           meigara_df = pd.read_csv(
@@ -54,7 +54,7 @@ jobs:
                   taisyaku_set.add(code)
 
           # ============================
-          # JSF seigenichiran.csv（規制情報）
+          # JSF seigenichiran.csv（規制）
           # ============================
           sei_df = pd.read_csv(
               base + "seigenichiran.csv",
@@ -96,7 +96,7 @@ jobs:
                       }
 
           # ============================
-          # JPX 週末信用残（05.html → PDF）
+          # JPX 週次 PDF（syumatsu）
           # ============================
           jpx_page = "https://www.jpx.co.jp/markets/statistics-equities/margin/05.html"
           jpx_html = requests.get(jpx_page, headers=UA).text
@@ -115,7 +115,29 @@ jobs:
               f.write(pdf_data)
 
           # ============================
-          # JPX PDF パース（通常版）
+          # 日々公表（mtdailyk） XLS
+          # ============================
+          daily_url = "https://www.jpx.co.jp/markets/statistics-equities/margin/tvdivq0000001r92-att/mtdailyk2026060400.xls"
+          daily_df = pd.read_excel(daily_url, dtype=str)
+
+          # 銘柄コード列を抽出
+          daily_df.columns = daily_df.columns.str.strip()
+          daily_df = daily_df.dropna(subset=[daily_df.columns[0]])
+
+          daily_map = {}
+          for _, row in daily_df.iterrows():
+              raw = str(row[daily_df.columns[0]])
+              if re.fullmatch(r"\d{4,5}", raw):
+                  code4 = raw[-4:]
+                  try:
+                      sell = int(str(row[daily_df.columns[2]]).replace(",", ""))
+                      buy  = int(str(row[daily_df.columns[4]]).replace(",", ""))
+                  except:
+                      continue
+                  daily_map[code4] = {"sell": sell, "buy": buy}
+
+          # ============================
+          # JPX PDF パース（週次 syumatsu）
           # ============================
           jpx_map = {}
 
@@ -126,7 +148,6 @@ jobs:
                   if t:
                       full_text += "\n" + t
 
-          # 5桁コードでブロックに分割
           blocks = re.split(r"(?=\d{5}\s+JP\d{10})", full_text)
 
           def parse_num(s):
@@ -146,14 +167,12 @@ jobs:
               code4 = code5[:4]
 
               after_isin = re.split(r"JP\d{10}", block)[1]
-
               nums = re.findall(r"[▲\-]?\s*[\d,]+", after_isin)
               nums = [parse_num(n) for n in nums]
 
               if len(nums) < 4:
                   continue
 
-              # 通常銘柄（ETF 対応前）
               sell = nums[0]
               sell_diff = nums[1]
               buy = nums[2]
@@ -168,6 +187,25 @@ jobs:
                   "sell_diff": sell_diff,
                   "ratio": ratio
               }
+
+          # ============================
+          # ★ 日々公表（mtdailyk）で上書き ★
+          # ============================
+          for code4, d in daily_map.items():
+              if code4 in jpx_map:
+                  jpx_map[code4]["sell"] = d["sell"]
+                  jpx_map[code4]["buy"]  = d["buy"]
+                  jpx_map[code4]["ratio"] = (
+                      round(d["buy"] / d["sell"], 2) if d["sell"] != 0 else None
+                  )
+              else:
+                  jpx_map[code4] = {
+                      "buy": d["buy"],
+                      "buy_diff": None,
+                      "sell": d["sell"],
+                      "sell_diff": None,
+                      "ratio": round(d["buy"] / d["sell"], 2) if d["sell"] != 0 else None
+                  }
 
           # ============================
           # margin.json 統合
@@ -201,5 +239,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (daily override)" || echo "No changes to commit"
           git push

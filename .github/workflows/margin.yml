@@ -57,27 +57,6 @@ jobs:
           # 2. 楽天証券の制度信用規制ページをスクレイピング（文字コード対応）
           # ============================================================
 
-          # --------------------------------------------------------------------
-          # 【重要】この辞書は楽天証券公式ページ
-          #   https://www.rakuten-sec.co.jp/ITS/qaOth0007.html
-          # に記載されている規制文言一覧を元に作成しています。
-          #
-          # 制度信用の新規建て可否に関係する文言（採用）：
-          #   ● 新規買停止
-          #   ● 新規売停止
-          #   ● 全取引停止
-          #
-          # 制度信用の新規建て可否に関係しないため除外した文言：
-          #   ● 整理銘柄 / 監理銘柄 / 特別注意銘柄 / 監視区分銘柄
-          #   ● 増担保 / レバETF / 日々公表銘柄 / 貸株注意喚起
-          #   ● 申告規制 / 即日預託 / 建玉上限
-          #   ● 制度信用社内規制（方向性不明）
-          #   ● 一般信用〜（制度信用とは別体系）
-          #   ● 返済系（返済買埋停止 / 返済売埋停止）
-          #   ● 現引 / 現渡（決済系）
-          #   ● 現物売付停止 / 現物買付停止（現物取引）
-          # --------------------------------------------------------------------
-
           BUY_BAN_KEYWORDS = [
               "新規買停止",
               "全取引停止",
@@ -88,7 +67,6 @@ jobs:
               "全取引停止",
           ]
 
-          # 楽天ページは Shift_JIS 系のため encoding を明示
           rakuten_url = "https://www.rakuten-sec.co.jp/ITS/Companyfile/margin_restriction.html"
           res = requests.get(rakuten_url, headers=UA)
           res.encoding = res.apparent_encoding
@@ -108,7 +86,6 @@ jobs:
 
           for row in soup.select("table tr"):
               cols = row.find_all("td")
-              # 摘要（規制内容）は 4 列目 → index 3
               if len(cols) < 4:
                   continue
 
@@ -117,12 +94,10 @@ jobs:
                   continue
 
               market = cols[2].get_text(strip=True)
-
-              # ★ 市場が東京系でなければ除外
               if not any(k in market for k in TOKYO_KEYWORDS):
                   continue
 
-              text = cols[3].get_text(strip=True)  # 摘要（規制内容）
+              text = cols[3].get_text(strip=True)
               if not text:
                   continue
 
@@ -245,7 +220,7 @@ jobs:
               }
 
           # ============================================================
-          # 6. 日々公表で上書き
+          # 6. 日々公表で上書き（★ newnew_buy → new_buy 修正済み）
           # ============================================================
           for code4, d in daily_map.items():
               if code4 in jpx_map:
@@ -255,7 +230,7 @@ jobs:
                   new_buy = d["buy"]
                   new_sell = d["sell"]
 
-                  jpx_map[code4]["buy"] = newnew_buy
+                  jpx_map[code4]["buy"] = new_buy
                   jpx_map[code4]["sell"] = new_sell
 
                   jpx_map[code4]["buy_diff"] = new_buy - prev_buy

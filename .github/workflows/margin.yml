@@ -1,4 +1,4 @@
-name: Margin Info Fetch (Full Debug for 183A)
+name: Margin Info Fetch (183A HTML Full Dump Debug)
 
 on:
   schedule:
@@ -50,21 +50,16 @@ jobs:
           taisyaku_set = set()
           kubun_map = {}
 
-          print("DEBUG meigara columns:", meigara_df.columns)
-          print("DEBUG meigara head:\n", meigara_df.head(20))
-
           for _, row in meigara_df.iterrows():
               raw_code = str(row["コード"])
               code = unicodedata.normalize("NFKC", raw_code).zfill(4)
               kubun = str(row["貸借銘柄区分（東証）"])
               kubun_map[code] = kubun
-              if code == "183A":
-                  print("DEBUG JSF 183A kubun:", repr(raw_code), "→", repr(code), "kubun:", kubun)
               if kubun == "1":
                   taisyaku_set.add(code)
 
           # ============================================================
-          # 2. 楽天証券 規制ページ
+          # 2. 楽天証券 規制ページ（183A HTMLフルダンプ）
           # ============================================================
           BUY_BAN_KEYWORDS = ["新規買停止", "全取引停止"]
           SELL_BAN_KEYWORDS = ["新規売停止", "全取引停止"]
@@ -89,6 +84,19 @@ jobs:
           current_vals = [None] * 6
           rowspan_left = [0] * 6
 
+          print("===== DEBUG: START DUMP ALL TR CONTAINING '183A' =====")
+          for tr in soup.select("table tr"):
+              tds = tr.find_all("td")
+              if not tds:
+                  continue
+              texts = [td.get_text(strip=True) for td in tds]
+              if any("183A" in t for t in texts):
+                  print("DEBUG TR RAW (contains 183A):")
+                  print(tr.prettify())
+                  print("DEBUG TD TEXTS:", texts)
+          print("===== DEBUG: END DUMP ALL TR CONTAINING '183A' =====")
+
+          # rowspan 展開＋通常処理
           for row in soup.select("table tr"):
               tds = row.find_all("td")
               if not tds:
@@ -142,8 +150,6 @@ jobs:
                   print("DEBUG 183A market raw:", repr(market), "→ flag:", market_flag)
 
               if not market_flag:
-                  if code == "183A":
-                      print("DEBUG 183A SKIP by market:", repr(market))
                   continue
 
               regulation_map.setdefault(code, []).append(text)
@@ -156,7 +162,6 @@ jobs:
               if any(k in text for k in SELL_BAN_KEYWORDS):
                   sell_ban_map[code] = True
 
-          print("DEBUG regulation_map keys:", list(regulation_map.keys()))
           print("DEBUG regulation_map[183A]:", regulation_map.get("183A"))
 
           # ============================================================
@@ -212,7 +217,7 @@ jobs:
                   code4 = unicodedata.normalize("NFKC", raw[:4])
                   try:
                       sell = int(str(row[sell_col]).replace(",", ""))
-                      buy  = int(str(row[buy_col]).replace(",", ""))
+                      buy = int(str(row[buy_col]).replace(",", ""))
                   except Exception:
                       continue
                   daily_map[code4] = {"sell": sell, "buy": buy}
@@ -299,7 +304,7 @@ jobs:
                   }
 
           # ============================================================
-          # 7. margin.json 統合（183A フルデバッグ）
+          # 7. margin.json 統合
           # ============================================================
           margin = {}
 
@@ -353,5 +358,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json (183A full debug)" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (183A HTML full dump debug)" || echo "No changes to commit"
           git push

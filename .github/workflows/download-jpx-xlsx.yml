@@ -64,7 +64,7 @@ jobs:
 
       - name: Convert XLS → XLSX (keep name as data_j.xlsx)
         run: |
-          libreoffice --headless --convert-to xlsx data_j.xls --outdir data
+          libreoffice --headless --convert-to xlsx data/data_j.xls --outdir data
 
       - name: Backup files (JST timestamp)
         run: |
@@ -75,7 +75,7 @@ jobs:
 
       - name: Remove data_j.xls (not needed after backup)
         run: |
-          rm data_j.xls
+          rm data/data_j.xls
 
       - name: Cleanup old backups (older than 3 days, based on filename timestamp)
         shell: python

@@ -214,7 +214,7 @@ jobs:
                   code4 = unicodedata.normalize("NFKC", raw[:4])
                   try:
                       sell = int(str(row[sell_col]).replace(",", ""))
-                      buy = int(str[row[buy_col]).replace(",", ""))
+                      buy = int(str(row[buy_col]).replace(",", ""))
                   except Exception:
                       continue
                   daily_map[code4] = {"sell": sell, "buy": buy}

@@ -196,10 +196,15 @@ jobs:
               # --- デバッグ出力（抽出結果） ---
               print("DEBUG extracted:", code, market, text)
 
-              if not code or not re.fullmatch(r"\d{4}", code):
-                  continue
+              # --- 市場フィルタのデバッグ ---
+              if market is None:
+                  market_flag = False
+              else:
+                  market_flag = any(k in market for k in TOKYO_KEYWORDS)
+              print("DEBUG market check:", market, "→", market_flag)
 
-              if not market or not any(k in market for k in TOKYO_KEYWORDS):
+              if not market_flag:
+                  print("DEBUG SKIP (market filtered):", code, market)
                   continue
 
               regulation_map.setdefault(code, []).append(text)
@@ -386,5 +391,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json (Full rowspan support + Debug)" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (Full rowspan support + Debug market filter)" || echo "No changes to commit"
           git push

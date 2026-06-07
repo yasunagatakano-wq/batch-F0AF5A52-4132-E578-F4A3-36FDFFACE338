@@ -1,4 +1,4 @@
-name: Margin Info Fetch (Seido Only, Rakuten Regulation, Tokyo Market Only, Full Rowspan Support)
+name: Margin Info Fetch (Seido Only, Rakuten Regulation, Tokyo Market Only, Full Rowspan Support + Debug)
 
 on:
   schedule:
@@ -127,14 +127,6 @@ jobs:
           #      → 現物取引の規制であり、信用新規建てとは無関係
           #
           # --------------------------------------------------------------------
-          # 【結論】
-          #   → 制度信用の新規建て可否に影響するのは以下のみ：
-          #
-          #      ・新規買停止
-          #      ・新規売停止
-          #      ・全取引停止
-          #
-          # --------------------------------------------------------------------
 
           BUY_BAN_KEYWORDS = ["新規買停止", "全取引停止"]
           SELL_BAN_KEYWORDS = ["新規売停止", "全取引停止"]
@@ -162,51 +154,47 @@ jobs:
           current_vals = [None] * 6
           rowspan_left = [0] * 6
 
-          # ------------------------------------------------------------
-          # ★ 汎用 rowspan 展開アルゴリズム（どの列に rowspan が来ても対応）
-          # ------------------------------------------------------------
-
-          current_vals = [None] * 6
-          rowspan_left = [0] * 6
-
-          regulation_map = {}
-          buy_ban_map = {}
-          sell_ban_map = {}
-
           for row in soup.select("table tr"):
               tds = row.find_all("td")
               if not tds:
                   continue
 
               logical = [None] * 6
-              col_idx = 0
+              td_i = 0
 
               # rowspan 継続中の列を埋める
-              for i in range(6):
-                  if rowspan_left[i] > 0:
-                      logical[i] = current_vals[i]
-                      rowspan_left[i] -= 1
+              for col in range(6):
+                  if rowspan_left[col] > 0:
+                      logical[col] = current_vals[col]
+                      rowspan_left[col] -= 1
 
-              # この行の td を左から順に論理列に割り当てる
-              for td in tds:
-                  while col_idx < 6 and logical[col_idx] is not None:
-                      col_idx += 1
-                  if col_idx >= 6:
+              # この行の td を左から順に割り当てる
+              for col in range(6):
+                  if logical[col] is not None:
+                      continue
+                  if td_i >= len(tds):
                       break
 
+                  td = tds[td_i]
                   text = td.get_text(strip=True)
-                  logical[col_idx] = text
+                  logical[col] = text
 
                   rs = td.get("rowspan")
                   if rs:
-                      rowspan_left[col_idx] = int(rs) - 1
-                      current_vals[col_idx] = text
+                      rowspan_left[col] = int(rs) - 1
+                      current_vals[col] = text
 
-                  col_idx += 1
+                  td_i += 1
+
+              # --- デバッグ出力（rowspan 展開後の論理列） ---
+              print("DEBUG logical:", logical)
 
               code   = logical[0]
               market = logical[2]
               text   = logical[3]
+
+              # --- デバッグ出力（抽出結果） ---
+              print("DEBUG extracted:", code, market, text)
 
               if not code or not re.fullmatch(r"\d{4}", code):
                   continue
@@ -398,5 +386,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json (Full rowspan support + Comment restored)" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (Full rowspan support + Debug)" || echo "No changes to commit"
           git push

@@ -1,4 +1,4 @@
-name: Margin Info Fetch (Daily Override Auto Detect)
+name: Margin Info Fetch (Rakuten-spec Credit Categories)
 
 on:
   schedule:
@@ -76,7 +76,7 @@ jobs:
               regulation_map.setdefault(code, []).append(reason)
 
           # ============================
-          # 楽天 一般信用
+          # 楽天 一般信用（在庫区分のみ）
           # ============================
           rakuten_url = "https://www.rakuten-sec.co.jp/web/market/search/general_margin/"
           html = requests.get(rakuten_url, headers=UA).text
@@ -114,7 +114,7 @@ jobs:
               f.write(pdf_data)
 
           # ============================
-          # ★ 日々公表（mtdailyk） XLS 自動検出 ★
+          # 日々公表（mtdailyk） XLS 自動検出
           # ============================
           daily_index = "https://www.jpx.co.jp/markets/statistics-equities/margin/index.html"
           daily_html = requests.get(daily_index, headers=UA).text
@@ -136,7 +136,6 @@ jobs:
           else:
               daily_url = latest_daily
 
-          # ★ XLS を xlrd 2.0.1 で読み込む（header=5）
           daily_df = pd.read_excel(
               daily_url,
               dtype=str,
@@ -144,9 +143,6 @@ jobs:
               header=5
           )
 
-          # ============================
-          # ★ 列名で参照（日本語列名） ★
-          # ============================
           code_col = "コード"
           sell_col = "売残高 Outstanding Sales"
           buy_col  = "買残高 Outstanding Purchases"
@@ -216,7 +212,7 @@ jobs:
               }
 
           # ============================
-          # ★ 日々公表（mtdailyk）で上書き（前週比を正しく計算） ★
+          # 日々公表で上書き（前週比は差分）
           # ============================
           for code4, d in daily_map.items():
               if code4 in jpx_map:
@@ -245,7 +241,7 @@ jobs:
                   }
 
           # ============================
-          # margin.json 統合（建て区分 完全統合）
+          # margin.json 統合（楽天仕様の建て区分）
           # ============================
           margin = {}
           all_codes = set(taisyaku_set) | set(jpx_map.keys()) | set(general_map.keys())
@@ -255,17 +251,27 @@ jobs:
               regs = regulation_map.get(code, [])
               gen = general_map.get(code, {"在庫区分": "×", "在庫数量": None})
 
-              # 制度信用（貸借銘柄）
-              sei_buy = code in taisyaku_set and not any("買" in r for r in regs)
-              sei_sell = code in taisyaku_set and not any(("売" in r or "申込停止:新規売" in r) for r in regs)
+              # 規制判定の簡略ロジック
+              has_buy_ban = any("買" in r for r in regs)
+              has_sell_ban = any("売" in r for r in regs)
 
-              # 一般信用
-              gen_buy = not any("買" in r for r in regs)
-              gen_sell = gen["在庫区分"] != "×" and not any(("売" in r or "申込停止:新規売" in r) for r in regs)
+              # 制度信用（楽天仕様）
+              # 買い建て: 規制に買禁がなければ可
+              # 売り建て: 楽天では原則提供なし → 常に False（規制に関係なく）
+              sei_buy = not has_buy_ban
+              sei_sell = False
 
-              # 一日信用（一般信用と同じ判定）
-              day_buy = gen_buy
-              day_sell = gen_sell
+              # 一般信用（楽天仕様）
+              # 買い建て: 規制に買禁がなければ可
+              # 売り建て: 在庫区分が × でなく、かつ規制に売禁がなければ可
+              gen_buy = not has_buy_ban
+              gen_sell = (gen["在庫区分"] != "×") and (not has_sell_ban)
+
+              # 一日信用（楽天仕様）
+              # 買い建て: 規制に買禁がなければ可
+              # 売り建て: 規制に売禁がなければ可（在庫は別体系とみなし、ここでは常に可とする）
+              day_buy = not has_buy_ban
+              day_sell = not has_sell_ban
 
               margin[code] = {
                   "制度信用": {
@@ -298,5 +304,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json (full credit categories)" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (Rakuten credit spec)" || echo "No changes to commit"
           git push

@@ -1,4 +1,4 @@
-name: Margin Info Fetch (Seido Only, Rakuten Regulation, Tokyo Market Only, Rowspan Supported)
+name: Margin Info Fetch (Seido Only, Rakuten Regulation, Tokyo Market Only, Full Rowspan Support)
 
 on:
   schedule:
@@ -54,8 +54,87 @@ jobs:
                   taisyaku_set.add(code)
 
           # ============================================================
-          # 2. 楽天証券の制度信用規制ページ（rowspan 完全対応）
+          # 2. 楽天証券の制度信用規制ページ
+          #    （公式文言一覧・採用/非採用理由コメント完全復元）
           # ============================================================
+
+          # --------------------------------------------------------------------
+          # 【参考元】
+          #   楽天証券公式ページ：
+          #   https://www.rakuten-sec.co.jp/ITS/qaOth0007.html
+          #
+          # 【公式ページに記載されている規制文言一覧】
+          #
+          #  整理銘柄
+          #  監理銘柄（審査中）
+          #  監理銘柄（確認中）
+          #  特別注意銘柄
+          #  監視区分銘柄
+          #  増担保***％（うち現金***％）
+          #  レバETF
+          #  日々公表銘柄
+          #  貸株注意喚起
+          #  申告規制
+          #  即日預託
+          #  制度信用社内規制
+          #  一般信用社内規制
+          #  建玉上限
+          #
+          #  代用掛目規制***％
+          #  代用掛目規制予定***％
+          #  新規買停止
+          #  一般信用新規買停止
+          #  新規売停止
+          #  一般信用新規売停止
+          #  返済買埋停止
+          #  一般信用返済買埋停止
+          #  返済売埋停止
+          #  一般信用返済売埋停止
+          #  現引停止
+          #  一般信用現引停止
+          #  現渡停止
+          #  一般信用現渡停止
+          #  全取引停止
+          #  現物売付停止
+          #  現物買付停止
+          #
+          # --------------------------------------------------------------------
+          # 【制度信用の新規建て可否に採用した文言】
+          #
+          #  ● 新規買停止      → 制度信用の新規買い禁止
+          #  ● 新規売停止      → 制度信用の新規売り禁止
+          #  ● 全取引停止      → 新規買い・新規売りともに禁止
+          #
+          # --------------------------------------------------------------------
+          # 【制度信用の新規建て可否に採用しなかった文言（理由付き）】
+          #
+          #  ● 整理銘柄 / 監理銘柄 / 特別注意銘柄 / 監視区分銘柄
+          #      → 注意喚起・情報区分であり、新規建て可否とは無関係
+          #
+          #  ● 増担保 / レバETF / 日々公表銘柄 / 貸株注意喚起
+          #      → 担保率や注意喚起であり、新規建て可否とは無関係
+          #
+          #  ● 申告規制 / 即日預託 / 建玉上限
+          #      → 取引条件や建玉制限であり、新規建て可否とは無関係
+          #
+          #  ● 制度信用社内規制
+          #      → 文言だけでは「買い禁止」「売り禁止」が判別できないため除外
+          #
+          #  ● 一般信用〜（新規買停止 / 新規売停止 / 返済系 / 現引 / 現渡）
+          #      → 一般信用専用の規制であり、制度信用とは別体系
+          #
+          #  ● 現物売付停止 / 現物買付停止
+          #      → 現物取引の規制であり、信用新規建てとは無関係
+          #
+          # --------------------------------------------------------------------
+          # 【結論】
+          #   → 制度信用の新規建て可否に影響するのは以下のみ：
+          #
+          #      ・新規買停止
+          #      ・新規売停止
+          #      ・全取引停止
+          #
+          # --------------------------------------------------------------------
 
           BUY_BAN_KEYWORDS = ["新規買停止", "全取引停止"]
           SELL_BAN_KEYWORDS = ["新規売停止", "全取引停止"]
@@ -76,52 +155,62 @@ jobs:
               "プライム", "スタンダード", "グロース"
           ]
 
-          current_code = None
-          current_market = None
+          # ------------------------------------------------------------
+          # ★ 汎用 rowspan 展開アルゴリズム（どの列に rowspan が来ても対応）
+          # ------------------------------------------------------------
+
+          current_vals = [None] * 6
+          rowspan_left = [0] * 6
+
+          # ------------------------------------------------------------
+          # ★ 汎用 rowspan 展開アルゴリズム（どの列に rowspan が来ても対応）
+          # ------------------------------------------------------------
+
+          current_vals = [None] * 6
+          rowspan_left = [0] * 6
+
+          regulation_map = {}
+          buy_ban_map = {}
+          sell_ban_map = {}
 
           for row in soup.select("table tr"):
-              cols = row.find_all("td")
-
-              # td が 1 つもない行（見出し行など）はスキップ
-              if not cols:
+              tds = row.find_all("td")
+              if not tds:
                   continue
 
-              # -------------------------------
-              # rowspan の 1 行目（コードあり）
-              # -------------------------------
-              if len(cols) >= 4 and re.fullmatch(r"\d{4}", cols[0].get_text(strip=True)):
-                  code = cols[0].get_text(strip=True)
-                  market = cols[2].get_text(strip=True)
-                  text = cols[3].get_text(strip=True)
-                  current_code = code
-                  current_market = market
+              logical = [None] * 6
+              col_idx = 0
 
-              # -------------------------------
-              # rowspan の 2 行目以降（コードなし）
-              # -------------------------------
-              else:
-                  # 直前にコード行がなければ無視
-                  if current_code is None:
-                      continue
+              # rowspan 継続中の列を埋める
+              for i in range(6):
+                  if rowspan_left[i] > 0:
+                      logical[i] = current_vals[i]
+                      rowspan_left[i] -= 1
 
-                  code = current_code
-                  market = current_market
+              # この行の td を左から順に論理列に割り当てる
+              for td in tds:
+                  while col_idx < 6 and logical[col_idx] is not None:
+                      col_idx += 1
+                  if col_idx >= 6:
+                      break
 
-                  # パターンB（市場 + 摘要）
-                  if len(cols) >= 2 and (
-                      "東京" in cols[0].get_text(strip=True) or
-                      "JNX" in cols[0].get_text(strip=True) or
-                      "市場" in cols[0].get_text(strip=True)
-                  ):
-                      text = cols[1].get_text(strip=True)
+                  text = td.get_text(strip=True)
+                  logical[col_idx] = text
 
-                  # パターンC（摘要が cols[0]）
-                  else:
-                      text = cols[0].get_text(strip=True)
+                  rs = td.get("rowspan")
+                  if rs:
+                      rowspan_left[col_idx] = int(rs) - 1
+                      current_vals[col_idx] = text
 
-              # -------------------------------
-              # 市場フィルタ（market が None または空ならスキップ）
-              # -------------------------------
+                  col_idx += 1
+
+              code   = logical[0]
+              market = logical[2]
+              text   = logical[3]
+
+              if not code or not re.fullmatch(r"\d{4}", code):
+                  continue
+
               if not market or not any(k in market for k in TOKYO_KEYWORDS):
                   continue
 
@@ -309,5 +398,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json (Seido only, Rakuten regulation, Tokyo only, rowspan supported, market None safe)" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (Full rowspan support + Comment restored)" || echo "No changes to commit"
           git push

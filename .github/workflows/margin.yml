@@ -181,8 +181,10 @@ jobs:
                   else:
                       text = cols[0].get_text(strip=True)
 
-              # 市場フィルタ
-              if not any(k in market for k in TOKYO_KEYWORDS):
+              # -------------------------------
+              # 市場フィルタ（market が None の場合はスキップ）
+              # -------------------------------
+              if not market or not any(k in market for k in TOKYO_KEYWORDS):
                   continue
 
               # 規制内容追加
@@ -370,5 +372,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add margin.json || true
-          git commit -m "Auto-update margin.json (Seido only, Rakuten regulation, Tokyo only, rowspan supported, comments restored)" || echo "No changes to commit"
+          git commit -m "Auto-update margin.json (Seido only, Rakuten regulation, Tokyo only, rowspan supported, comments restored, market None safe)" || echo "No changes to commit"
           git push

@@ -413,4 +413,6 @@ jobs:
           git config user.email "actions@github.com"
           git add data/margin.json data/backup/ || true
           git commit -m "Auto-update margin.json + backup" || echo "No changes to commit"
+          # リモートの変更を取り込む
+          git pull --rebase || true
           git push

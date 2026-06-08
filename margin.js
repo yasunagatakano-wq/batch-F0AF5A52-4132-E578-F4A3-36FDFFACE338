@@ -35,33 +35,35 @@ function normalizeCode(code) {
 }
 
 // ======================================================================
-// 1. JSF 貸借銘柄 meigara.csv（Shift_JIS + 正しい列構造）
+// 1. JSF 貸借銘柄 meigara.csv（Shift_JIS, 1行目タイトル, 2行目ヘッダ, 3行目以降データ）
 // ======================================================================
 async function fetchKubunMap() {
   const url = "https://www.taisyaku.jp/data/meigara.csv";
   const res = await fetch(url);
   const buf = Buffer.from(await res.arrayBuffer());
 
-  // Shift_JIS → UTF-8
   const csv = iconv.decode(buf, "shift_jis");
-
   const lines = csv.split(/\r?\n/);
 
-  // 1行目はタイトル行 → 捨てる
-  // 2行目がヘッダ行
+  if (lines.length < 3) {
+    throw new Error("meigara.csv の行数が不足しています");
+  }
+
+  // 1行目: タイトル
+  // 2行目: ヘッダ
   const headerLine = lines[1];
   const headers = headerLine.split(",");
 
-  // 「貸借銘柄区分（東証）」列を自動検出
   const kubunIndex = headers.indexOf("貸借銘柄区分（東証）");
+  const codeIndex = headers.indexOf("コード");
 
-  console.log("=== DETECTED HEADERS ===");
+  console.log("=== JSF meigara.csv HEADERS ===");
   console.log(headers);
-  console.log("貸借区分（東証） index =", kubunIndex);
-  console.log("=========================");
+  console.log("コード index =", codeIndex, " 貸借区分（東証） index =", kubunIndex);
+  console.log("================================");
 
-  if (kubunIndex === -1) {
-    throw new Error("貸借銘柄区分（東証）列が見つかりません");
+  if (kubunIndex === -1 || codeIndex === -1) {
+    throw new Error("コード または 貸借銘柄区分（東証）列が見つかりません");
   }
 
   const kubunMap = {};
@@ -73,7 +75,7 @@ async function fetchKubunMap() {
 
     const cols = line.split(",");
 
-    const rawCode = cols[1]; // ← ここ重要：2行目の列構造に基づく
+    const rawCode = cols[codeIndex];
     const kubun = cols[kubunIndex];
 
     if (!rawCode) continue;
@@ -175,6 +177,10 @@ async function fetchJpxWeekly() {
     .filter(h => h.endsWith(".pdf") && h.includes("syumatsu"))
     .map(h => "https://www.jpx.co.jp" + h);
 
+  if (pdfLinks.length === 0) {
+    return {};
+  }
+
   const latest = pdfLinks.sort().slice(-1)[0];
   const pdfRes = await fetch(latest);
   const pdfBuf = await pdfRes.arrayBuffer();
@@ -236,6 +242,10 @@ async function fetchJpxDaily() {
     .map(a => a.href)
     .filter(h => /mtdailyk.*\.xls$/.test(h));
 
+  if (links.length === 0) {
+    return {};
+  }
+
   const latest = links.sort().slice(-1)[0];
   const url = "https://www.jpx.co.jp" + latest;
 
@@ -261,7 +271,7 @@ async function fetchJpxDaily() {
 }
 
 // ======================================================================
-// 5. margin.json 統合
+// 5. margin.json 統合（規制 + 日々公表上書き）
 // ======================================================================
 function buildMarginJson(kubunMap, regulationMap, BUY_BAN, SELL_BAN, jpxMap, dailyMap) {
   const margin = {};
@@ -275,11 +285,11 @@ function buildMarginJson(kubunMap, regulationMap, BUY_BAN, SELL_BAN, jpxMap, dai
 
   for (const code of allCodes) {
     const kubun = kubunMap[code];
-
     if (kubun === "0" || kubun == null) continue;
 
     const regs = regulationMap[code] || [];
-    const jpx = jpxMap[code] || {};
+    const weekly = jpxMap[code] || {};
+    const daily = dailyMap[code] || null;
 
     const hasBuyBan = regs.some(r => BUY_BAN.some(k => r.includes(k)));
     const hasSellBan = regs.some(r => SELL_BAN.some(k => r.includes(k)));
@@ -287,17 +297,39 @@ function buildMarginJson(kubunMap, regulationMap, BUY_BAN, SELL_BAN, jpxMap, dai
     const seiBuy = !hasBuyBan;
     const seiSell = kubun === "1" && !hasSellBan;
 
+    let buy = weekly.buy;
+    let sell = weekly.sell;
+    let buyDiff = weekly.buy_diff;
+    let sellDiff = weekly.sell_diff;
+    let ratio = weekly.ratio;
+
+    const isDailyByReg = regs.some(r => r.includes("日々公表"));
+
+    if (daily || isDailyByReg) {
+      const d = daily || {};
+      const dBuy = d.buy ?? buy ?? 0;
+      const dSell = d.sell ?? sell ?? 0;
+      const wBuy = weekly.buy ?? 0;
+      const wSell = weekly.sell ?? 0;
+
+      buy = dBuy;
+      sell = dSell;
+      buyDiff = dBuy - wBuy;
+      sellDiff = dSell - wSell;
+      ratio = dSell !== 0 ? Math.round((dBuy / dSell) * 100) / 100 : null;
+    }
+
     margin[code] = {
       "貸借区分": kubun,
       "制度信用": {
         "買い建て": seiBuy,
         "売り建て": seiSell
       },
-      "JPX信用買残": jpx.buy,
-      "JPX信用買残前週比": jpx.buy_diff,
-      "JPX信用売残": jpx.sell,
-      "JPX信用売残前週比": jpx.sell_diff,
-      "JPX信用倍率": jpx.ratio,
+      "JPX信用買残": buy,
+      "JPX信用買残前週比": buyDiff,
+      "JPX信用売残": sell,
+      "JPX信用売残前週比": sellDiff,
+      "JPX信用倍率": ratio,
       "規制": regs
     };
   }
@@ -312,11 +344,15 @@ function backupMargin() {
   ensureDir("data/backup");
 
   const ts = timestamp();
-  fs.copyFileSync("data/margin.json", `data/backup/margin.json.${ts}`);
+  if (fs.existsSync("data/margin.json")) {
+    fs.copyFileSync("data/margin.json", `data/backup/margin.json.${ts}`);
+  }
 }
 
 function cleanupBackups() {
   const dir = "data/backup";
+  if (!fs.existsSync(dir)) return;
+
   const files = fs.readdirSync(dir);
 
   for (const f of files) {

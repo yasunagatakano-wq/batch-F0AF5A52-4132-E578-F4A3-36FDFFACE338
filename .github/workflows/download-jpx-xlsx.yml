@@ -19,99 +19,20 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libreoffice python3 python3-pip
-          pip3 install requests beautifulsoup4 lxml pytz
+          sudo apt-get install -y libreoffice
+          npm install node-fetch@3 xlsx
 
       - name: Ensure data directory exists
-        run: |
-          mkdir -p data
+        run: mkdir -p data
 
-      - name: Scrape JPX page to get data_j.xls URL
-        id: scrape
-        shell: python
-        run: |
-          import requests
-          from bs4 import BeautifulSoup
-          from urllib.parse import urlparse
-          import os
-
-          url = "https://www.jpx.co.jp/markets/statistics-equities/misc/01.html"
-
-          parsed = urlparse(url)
-          root = f"{parsed.scheme}://{parsed.netloc}"
-
-          html = requests.get(url).text
-          soup = BeautifulSoup(html, "lxml")
-
-          link = None
-          for a in soup.find_all("a", href=True):
-              if "data_j.xls" in a["href"]:
-                  link = a["href"]
-                  break
-
-          if not link:
-              raise Exception("data_j.xls のリンクが見つかりませんでした")
-
-          if link.startswith("/"):
-              link = root + link
-
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"url={link}\n")
-
-      - name: Download data_j.xls
-        run: |
-          curl -L "${{ steps.scrape.outputs.url }}" -o data/data_j.xls
-
-      - name: Convert XLS → XLSX (keep name as data_j.xlsx)
-        run: |
-          libreoffice --headless --convert-to xlsx data/data_j.xls --outdir data
-
-      - name: Backup files (JST timestamp)
-        run: |
-          mkdir -p data/backup
-          TS=$(TZ='Asia/Tokyo' date +"%Y%m%d_%H%M%S")
-          cp data/data_j.xls data/backup/data_j.xls.$TS
-          cp data/data_j.xlsx data/backup/data_j.xlsx.$TS
-
-      - name: Remove data_j.xls (not needed after backup)
-        run: |
-          rm data/data_j.xls
-
-      - name: Cleanup old backups (older than 3 days, based on filename timestamp)
-        shell: python
-        run: |
-          import os
-          import re
-          from datetime import datetime, timedelta
-          import pytz
-          import subprocess
-
-          backup_dir = "data/backup"
-          pattern = re.compile(r"(data_j\.(xls|xlsx))\.(\d{8}_\d{6})$")
-
-          tz = pytz.timezone("Asia/Tokyo")
-          now = datetime.now(tz)
-
-          for fname in os.listdir(backup_dir):
-              m = pattern.match(fname)
-              if not m:
-                  continue
-
-              timestamp_str = m.group(3)
-              dt = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
-              dt = tz.localize(dt)
-
-              if now - dt > timedelta(days=3):
-                  full_path = os.path.join(backup_dir, fname)
-                  print(f"Deleting old backup: {full_path}")
-                  subprocess.run(["git", "rm", full_path], check=False)
+      - name: Run JPX fetch script
+        run: node download-jpx-xlsx.js
 
       - name: Commit & Push
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add data/data_j.xlsx data/backup/ || true
-          git commit -m "Auto-update JPX data_j.xlsx + backup" || echo "No changes to commit"
-          # リモートの変更を取り込む
+          git commit -m "Auto-update JPX data_j.xlsx + backup" || echo "No changes"
           git pull --rebase || true
           git push

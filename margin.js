@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
 import xlsx from "xlsx";
-import pdf from "pdf-parse";
+import pdfParse from "pdf-parse";
 import { JSDOM } from "jsdom";
 
 // ======================================================================
@@ -209,7 +209,7 @@ async function fetchJpxWeekly() {
   const pdfRes = await fetch(latest);
   const pdfBuf = await pdfRes.buffer();
 
-  const parsed = await pdf(pdfBuf);
+  const parsed = await pdfParse(pdfBuf);
   const text = parsed.text;
 
   const blocks = text.split(/(?=[0-9A-Z]{4}0\s+JP\d{10})/);

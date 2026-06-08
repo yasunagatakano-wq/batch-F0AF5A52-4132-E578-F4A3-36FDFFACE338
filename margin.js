@@ -1,10 +1,14 @@
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
 import xlsx from "xlsx";
-import pdfParse from "pdf-parse";
 import { JSDOM } from "jsdom";
+import { execSync } from "child_process";
+
+// ★ pdf-parse は CommonJS のため require で読み込む
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 // ======================================================================
 // Utility

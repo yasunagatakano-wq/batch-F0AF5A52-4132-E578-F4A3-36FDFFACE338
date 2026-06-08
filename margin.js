@@ -84,7 +84,7 @@ async function fetchKubunMap() {
 }
 
 // ======================================================================
-// 2. 楽天規制（rowspan 対応）
+// 2. 楽天規制（rowspan 対応・詳細デバッグ）
 // ======================================================================
 async function fetchRakutenRegulation() {
   console.log("\n==============================");
@@ -94,6 +94,11 @@ async function fetchRakutenRegulation() {
   const url = "https://www.rakuten-sec.co.jp/ITS/Companyfile/margin_restriction.html";
   const res = await fetch(url);
   const html = await res.text();
+
+  console.log("楽天 HTML length =", html.length);
+  console.log("\n=== RAW HTML (first 2000 chars) ===");
+  console.log(html.slice(0, 2000));
+  console.log("====================================");
 
   const dom = new JSDOM(html);
   const document = dom.window.document;
@@ -108,6 +113,10 @@ async function fetchRakutenRegulation() {
   const regulationMap = {};
   const current = Array(6).fill(null);
   const rowspanLeft = Array(6).fill(0);
+
+  let debugRowCount = 0;
+  let rawCodeNonEmpty = 0;
+  let rawCodeDigit4 = 0;
 
   for (const tr of rows) {
     const tds = [...tr.querySelectorAll("td")];
@@ -140,14 +149,22 @@ async function fetchRakutenRegulation() {
       td_i++;
     }
 
+    if (debugRowCount < 50) {
+      console.log(`ROW[${debugRowCount}] logical=`, logical);
+    }
+    debugRowCount++;
+
     const rawCode = logical[0];
     const market = logical[2];
     const text = logical[3];
 
     if (!rawCode) continue;
+    rawCodeNonEmpty++;
 
     const mCode = String(rawCode).match(/(\d{4})/);
     if (!mCode) continue;
+    rawCodeDigit4++;
+
     const code4 = mCode[1];
 
     let marketFlag = false;
@@ -161,6 +178,8 @@ async function fetchRakutenRegulation() {
     regulationMap[code4].push(text);
   }
 
+  console.log("rawCode 非空行数 =", rawCodeNonEmpty);
+  console.log("rawCode 4桁数字マッチ行数 =", rawCodeDigit4);
   console.log("regulationMap 件数 =", Object.keys(regulationMap).length);
   console.log("regulationMap サンプル =", Object.entries(regulationMap).slice(0, 10));
 

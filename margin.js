@@ -35,7 +35,7 @@ function normalizeCode(code) {
 }
 
 // ======================================================================
-// 1. JSF 貸借銘柄 meigara.csv（Shift_JIS 対応）
+// 1. JSF 貸借銘柄 meigara.csv（Shift_JIS 対応 + ヘッダログ追加）
 // ======================================================================
 async function fetchKubunMap() {
   const url = "https://www.taisyaku.jp/data/meigara.csv";
@@ -45,19 +45,22 @@ async function fetchKubunMap() {
   // Shift_JIS → UTF-8
   const csv = iconv.decode(buf, "shift_jis");
 
-  const lines = csv.split(/\r?\n/).slice(1);
+  const lines = csv.split(/\r?\n/);
+
+  // ★★★ ヘッダ行をログ出力（列構造を特定するため） ★★★
+  console.log("=== JSF meigara.csv HEADER ===");
+  console.log(lines[0]);
+  console.log("=== END HEADER ===");
+
+  const dataLines = lines.slice(1);
   const kubunMap = {};
 
-  for (const line of lines) {
+  for (const line of dataLines) {
     if (!line.trim()) continue;
 
     const cols = line.split(",");
 
-    // JSF meigara.csv の列構造:
-    // 0: コード
-    // 1: 銘柄名
-    // 2: 市場
-    // 3: 貸借銘柄区分（東証）
+    // ★ 現時点では仮に cols[3] を使う（後で修正する）
     const rawCode = cols[0];
     const kubun = cols[3];
 
@@ -80,61 +83,6 @@ async function fetchRakutenRegulation() {
 
   const dom = new JSDOM(html);
   const document = dom.window.document;
-
-  // ============================================================
-  // 楽天証券 規制文言辞書（出典：公式ページ）
-  // https://www.rakuten-sec.co.jp/ITS/qaOth0007.html
-  //
-  // 【公式ページに掲載されている規制文言一覧】
-  // - 整理銘柄
-  // - 監理銘柄（審査中）
-  // - 監理銘柄（確認中）
-  // - 特別注意銘柄
-  // - 監視区分銘柄
-  // - 増担保***％（うち現金***％）
-  // - レバETF
-  // - 日々公表銘柄
-  // - 貸株注意喚起
-  // - 申告規制
-  // - 即日預託
-  // - 制度信用社内規制
-  // - 一般信用社内規制
-  // - 建玉上限
-  //
-  // - 代用掛目規制***％
-  // - 代用掛目規制予定***％
-  //
-  // - 新規買停止
-  // - 一般信用新規買停止
-  // - 新規売停止
-  // - 一般信用新規売停止
-  // - 返済買埋停止
-  // - 一般信用返済買埋停止
-  // - 返済売埋停止
-  // - 一般信用返済売埋停止
-  // - 現引停止
-  // - 一般信用現引停止
-  // - 現渡停止
-  // - 一般信用現渡停止
-  // - 全取引停止
-  // - 現物売付停止
-  // - 現物買付停止
-  //
-  // 【採用した文言】
-  // - 新規買停止 → BUY_BAN_KEYWORDS に採用
-  // - 新規売停止 → SELL_BAN_KEYWORDS に採用
-  // - 全取引停止 → BUY/SELL 両方に採用
-  //
-  // 【採用しなかった文言と理由】
-  // - 「整理銘柄」「監理銘柄」「特別注意銘柄」など → 新規建て可否に直接影響しないため
-  // - 「増担保」「代用掛目規制」 → 新規建て可否ではなく担保率の問題のため
-  // - 「レバETF」 → 種類分類であり規制ではないため
-  // - 「日々公表銘柄」 → 注意喚起であり新規建て可否には影響しないため
-  // - 「貸株注意喚起」 → 同上
-  // - 「申告規制」「即日預託」 → 新規建て可否とは別種の規制のため
-  // - 「現引停止」「現渡停止」 → 決済方法の制限であり新規建て可否とは別
-  // - 「現物売付停止」「現物買付停止」 → 現物取引の規制であり信用取引の新規建てとは無関係
-  // ============================================================
 
   const BUY_BAN_KEYWORDS = ["新規買停止", "全取引停止"];
   const SELL_BAN_KEYWORDS = ["新規売停止", "全取引停止"];
@@ -200,7 +148,7 @@ async function fetchRakutenRegulation() {
 }
 
 // ======================================================================
-// 3. JPX 週次 PDF（pdfjs-dist 版・281A0 対応）
+// 3. JPX 週次 PDF（pdfjs-dist）
 // ======================================================================
 async function fetchJpxWeekly() {
   const page = "https://www.jpx.co.jp/markets/statistics-equities/margin/05.html";
@@ -262,7 +210,7 @@ async function fetchJpxWeekly() {
 }
 
 // ======================================================================
-// 4. JPX 日々公表 XLS（281A0 対応）
+// 4. JPX 日々公表 XLS
 // ======================================================================
 async function fetchJpxDaily() {
   const index = "https://www.jpx.co.jp/markets/statistics-equities/margin/index.html";

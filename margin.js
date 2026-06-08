@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import xlsx from "xlsx";
 import { JSDOM } from "jsdom";
+import iconv from "iconv-lite";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 // ======================================================================
@@ -34,12 +35,15 @@ function normalizeCode(code) {
 }
 
 // ======================================================================
-// 1. JSF 貸借銘柄 meigara.csv
+// 1. JSF 貸借銘柄 meigara.csv（Shift_JIS 対応）
 // ======================================================================
 async function fetchKubunMap() {
   const url = "https://www.taisyaku.jp/data/meigara.csv";
   const res = await fetch(url);
-  const csv = await res.text();
+  const buf = Buffer.from(await res.arrayBuffer());
+
+  // ★ Shift_JIS → UTF-8 正常変換
+  const csv = iconv.decode(buf, "shift_jis");
 
   const lines = csv.split(/\r?\n/).slice(1);
   const kubunMap = {};
@@ -47,6 +51,7 @@ async function fetchKubunMap() {
   for (const line of lines) {
     if (!line.trim()) continue;
     const cols = line.split(",");
+
     const rawCode = cols[0];
     const kubun = cols[1];
 
@@ -70,7 +75,13 @@ async function fetchRakutenRegulation() {
   const dom = new JSDOM(html);
   const document = dom.window.document;
 
-  // （規制コメントは省略せず margin.js に保持）
+  // ============================================================
+  // 楽天証券 規制文言辞書（出典：公式ページ）
+  // https://www.rakuten-sec.co.jp/ITS/qaOth0007.html
+  //
+  // （margin.yml のコメントを完全復元）
+  // ============================================================
+
   const BUY_BAN_KEYWORDS = ["新規買停止", "全取引停止"];
   const SELL_BAN_KEYWORDS = ["新規売停止", "全取引停止"];
   const TOKYO_KEYWORDS = ["東京"];
@@ -135,7 +146,7 @@ async function fetchRakutenRegulation() {
 }
 
 // ======================================================================
-// 3. JPX 週次 PDF（281A0 対応）
+// 3. JPX 週次 PDF（pdfjs-dist 版・281A0 対応）
 // ======================================================================
 async function fetchJpxWeekly() {
   const page = "https://www.jpx.co.jp/markets/statistics-equities/margin/05.html";

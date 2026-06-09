@@ -21,10 +21,10 @@ if (symbols.length === 0) {
 }
 
 // -----------------------------
-// 2. Yahoo Finance API（5日分取得）
+// 2. Yahoo Finance API（10日分取得）
 // -----------------------------
 async function fetchSymbol(symbol) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=10d`;
 
   try {
     const res = await fetch(url);
@@ -44,7 +44,7 @@ async function fetchSymbol(symbol) {
       return { error: "Not enough historical data" };
     }
 
-    // ★ 新構造：YYYYMMDD → OHLCV
+    // YYYYMMDD → OHLCV
     let result = {};
 
     for (let i = 0; i < timestamps.length; i++) {

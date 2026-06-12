@@ -66,6 +66,10 @@ async function fetchCandles(symbol, interval, range) {
     if (!timestamps || timestamps.length === 0) {
       return { error: "Not enough historical data" };
     }
+    
+    if (!timestamps || timestamps.length < 10) {
+      return { error: "Too few candles returned from Yahoo API" };
+    }
 
     let result = {};
 

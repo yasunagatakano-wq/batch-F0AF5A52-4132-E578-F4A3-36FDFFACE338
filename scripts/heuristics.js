@@ -3,9 +3,6 @@ import fs from "fs";
 import xlsx from "xlsx";
 import path from "path";
 
-console.log("CWD:", process.cwd());
-console.log("DIR:", fs.readdirSync("."));
-
 // ---------------------------------------------------------
 // 1. Excel から銘柄コードを読み込む（パス修正）
 // ---------------------------------------------------------
@@ -218,6 +215,30 @@ async function main() {
     const daily = await fetchCandles(symbol, "1d", "1y");
     const weekly = await fetchCandles(symbol, "1wk", "5y");
     const monthly = await fetchCandles(symbol, "1mo", "10y");
+
+    // --- データ不足チェック（fetchCandles の error を検出） ---
+    if (daily.error || weekly.error || monthly.error) {
+      console.log(`Skipping ${symbol} due to fetch error:`, {
+        daily: daily.error,
+        weekly: weekly.error,
+        monthly: monthly.error
+      });
+      finalData[symbol] = { error: "fetch error" };
+      continue;
+    }
+  
+    // --- ローソク足が少なすぎる場合もスキップ ---
+    if (Object.keys(daily).length < 120 ||
+        Object.keys(weekly).length < 120 ||
+        Object.keys(monthly).length < 120) {
+      console.log(`Skipping ${symbol} due to insufficient candles.`, {
+        daily: Object.keys(daily).length,
+        weekly: Object.keys(weekly).length,
+        monthly: Object.keys(monthly).length
+      });
+      finalData[symbol] = { error: "insufficient candles" };
+      continue;
+    }
 
     finalData[symbol] = runAllConditions(daily, weekly, monthly);
 

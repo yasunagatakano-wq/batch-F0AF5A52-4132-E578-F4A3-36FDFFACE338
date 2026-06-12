@@ -23,24 +23,39 @@ if (symbols.length === 0) {
 
 
 // ---------------------------------------------------------
-// ★ テストモード（1銘柄だけで動作確認したいときに使用）
+// ★ テストモード（複数銘柄で動作確認したいときに使用）
 // ---------------------------------------------------------
-// テストしたい銘柄コードを指定（例：7203.T）
+
+// テストしたい銘柄コードを複数指定（例：7203.T）
 // 有効化したいときは↓のコメントアウトを外すだけでOK
-const TEST_SYMBOL = "7203.T";  // ← 任意の銘柄に変更可能
+const TEST_SYMBOLS = [
+  // データ少ない
+  "5585.T", "5132.T", "5026.T", "4259.T",
+
+  // 上昇トレンド
+  "7203.T", "8306.T", "6861.T",
+
+  // 下降トレンド
+  "4755.T", "9984.T",
+
+  // ボラ高
+  "1514.T", "4165.T", "7373.T",
+  
+  // 必要に応じて追加
+];
 
 console.log("=== TEST MODE ENABLED ===");
-console.log(`Target symbol: ${TEST_SYMBOL}`);
+console.log(`Target symbols: ${TEST_SYMBOLS.join(", ")}`);
 
-// symbols を 1 銘柄だけに絞る
-symbols = symbols.filter(s => s === TEST_SYMBOL);
+// symbols を複数銘柄に絞る
+symbols = symbols.filter(s => TEST_SYMBOLS.includes(s));
 
 if (symbols.length === 0) {
-  console.log(`ERROR: TEST_SYMBOL ${TEST_SYMBOL} が Excel に存在しません。`);
+  console.log(`ERROR: TEST_SYMBOLS の銘柄が Excel に 1 つも存在しません。`);
   process.exit(1);
 }
 // ---------------------------------------------------------
-// ★ テストモード（1銘柄だけで動作確認したいときに使用）↑↑ここまで。
+// ★ テストモード（複数銘柄）↑↑ここまで。
 // ---------------------------------------------------------
 
 

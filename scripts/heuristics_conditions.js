@@ -987,25 +987,69 @@ export function computeRule9Weekly(weekly) {
 }
 
 // =========================================================
-// Rule9 ラッパー関数（SAFE）
+// Rule9 ラッパー関数（SAFE・最適化版）
 // =========================================================
 
 // 日足：上昇 Rule9
-export const isRule9DailyUp9  = d => computeRule9Daily(d).direction === "up"   && computeRule9Daily(d).over9;
-export const isRule9DailyUp17 = d => computeRule9Daily(d).direction === "up"   && computeRule9Daily(d).over17;
-export const isRule9DailyUp23 = d => computeRule9Daily(d).direction === "up"   && computeRule9Daily(d).over23;
+export const isRule9DailyUp9 = d => {
+  const r = computeRule9Daily(d);
+  return r.direction === "up" && r.over9;
+};
+
+export const isRule9DailyUp17 = d => {
+  const r = computeRule9Daily(d);
+  return r.direction === "up" && r.over17;
+};
+
+export const isRule9DailyUp23 = d => {
+  const r = computeRule9Daily(d);
+  return r.direction === "up" && r.over23;
+};
 
 // 日足：下降 Rule9
-export const isRule9DailyDown9  = d => computeRule9Daily(d).direction === "down" && computeRule9Daily(d).over9;
-export const isRule9DailyDown17 = d => computeRule9Daily(d).direction === "down" && computeRule9Daily(d).over17;
-export const isRule9DailyDown23 = d => computeRule9Daily(d).direction === "down" && computeRule9Daily(d).over23;
+export const isRule9DailyDown9 = d => {
+  const r = computeRule9Daily(d);
+  return r.direction === "down" && r.over9;
+};
+
+export const isRule9DailyDown17 = d => {
+  const r = computeRule9Daily(d);
+  return r.direction === "down" && r.over17;
+};
+
+export const isRule9DailyDown23 = d => {
+  const r = computeRule9Daily(d);
+  return r.direction === "down" && r.over23;
+};
 
 // 週足：上昇 Rule9
-export const isRule9WeeklyUp9  = w => computeRule9Weekly(w).direction === "up"   && computeRule9Weekly(w).over9;
-export const isRule9WeeklyUp17 = w => computeRule9Weekly(w).direction === "up"   && computeRule9Weekly(w).over17;
-export const isRule9WeeklyUp23 = w => computeRule9Weekly(w).direction === "up"   && computeRule9Weekly(w).over23;
+export const isRule9WeeklyUp9 = w => {
+  const r = computeRule9Weekly(w);
+  return r.direction === "up" && r.over9;
+};
+
+export const isRule9WeeklyUp17 = w => {
+  const r = computeRule9Weekly(w);
+  return r.direction === "up" && r.over17;
+};
+
+export const isRule9WeeklyUp23 = w => {
+  const r = computeRule9Weekly(w);
+  return r.direction === "up" && r.over23;
+};
 
 // 週足：下降 Rule9
-export const isRule9WeeklyDown9  = w => computeRule9Weekly(w).direction === "down" && computeRule9Weekly(w).over9;
-export const isRule9WeeklyDown17 = w => computeRule9Weekly(w).direction === "down" && computeRule9Weekly(w).over17;
-export const isRule9WeeklyDown23 = w => computeRule9Weekly(w).direction === "down" && computeRule9Weekly(w).over23;
+export const isRule9WeeklyDown9 = w => {
+  const r = computeRule9Weekly(w);
+  return r.direction === "down" && r.over9;
+};
+
+export const isRule9WeeklyDown17 = w => {
+  const r = computeRule9Weekly(w);
+  return r.direction === "down" && r.over17;
+};
+
+export const isRule9WeeklyDown23 = w => {
+  const r = computeRule9Weekly(w);
+  return r.direction === "down" && r.over23;
+};

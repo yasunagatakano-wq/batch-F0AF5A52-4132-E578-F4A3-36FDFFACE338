@@ -94,6 +94,15 @@ async function fetchCandles(symbol, interval, range) {
       };
     }
 
+    // result のサイズと最初の数件を確認
+    const keys = Object.keys(result);
+    console.log("=== FETCHED CANDLES SUMMARY ===");
+    console.log(`symbol=${symbol}, interval=${interval}, range=${range}`);
+    console.log(`result keys length = ${keys.length}`);
+    console.log("first 10 keys:", keys.slice(0, 10));
+    console.log("sample candles:", keys.slice(0, 5).map(k => result[k]));
+    console.log("=== END FETCHED CANDLES SUMMARY ===");
+    
     return result;
 
   } catch (err) {
@@ -254,6 +263,13 @@ async function main() {
       finalData[symbol] = { error: "insufficient candles" };
       continue;
     }
+
+    console.log("=== DAILY CANDLES BEFORE CONDITIONS ===");
+    const dKeys = Object.keys(daily);
+    console.log(`daily keys length = ${dKeys.length}`);
+    console.log("first 10 daily keys:", dKeys.slice(0, 10));
+    console.log("sample daily candles:", dKeys.slice(0, 5).map(k => daily[k]));
+    console.log("=== END DAILY CANDLES BEFORE CONDITIONS ===");
 
     finalData[symbol] = runAllConditions(daily, weekly, monthly);
 
